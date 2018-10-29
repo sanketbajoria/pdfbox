@@ -27,7 +27,7 @@
         <relativePath>../parent/pom.xml</relativePath>
     </parent>
 
-    <artifactId>pdfbox</artifactId>
+    <artifactId>pdfbox-modified</artifactId>
     <packaging>bundle</packaging>
 
     <name>Apache PDFBox</name>
@@ -38,6 +38,8 @@
     
     <properties>
     	<git.scmJavadocUrl>git:https://git-wip-us.apache.org/repos/asf/pdfbox-docs//content/docs/${project.version}/javadocs</git.scmJavadocUrl>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
     </properties>
     
     <dependencies>

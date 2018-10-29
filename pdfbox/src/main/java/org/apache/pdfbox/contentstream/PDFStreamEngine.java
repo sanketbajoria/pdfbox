@@ -22,6 +22,7 @@ import java.awt.geom.Rectangle2D;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,6 +32,8 @@ import java.util.Stack;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.pdfbox.contentstream.operator.MissingOperandException;
+import org.apache.pdfbox.contentstream.operator.Operator;
+import org.apache.pdfbox.contentstream.operator.OperatorProcessor;
 import org.apache.pdfbox.contentstream.operator.state.EmptyGraphicsStackException;
 import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSBase;
@@ -39,15 +42,19 @@ import org.apache.pdfbox.cos.COSObject;
 import org.apache.pdfbox.cos.COSString;
 import org.apache.pdfbox.filter.MissingImageReaderException;
 import org.apache.pdfbox.pdfparser.PDFStreamParser;
+import org.apache.pdfbox.pdfwriter.ContentStreamWriter;
 import org.apache.pdfbox.pdmodel.MissingResourceException;
+import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.common.PDStream;
 import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDFontFactory;
 import org.apache.pdfbox.pdmodel.font.PDType3CharProc;
 import org.apache.pdfbox.pdmodel.font.PDType3Font;
 import org.apache.pdfbox.pdmodel.graphics.PDLineDashPattern;
+import org.apache.pdfbox.pdmodel.graphics.blend.BlendMode;
 import org.apache.pdfbox.pdmodel.graphics.color.PDColor;
 import org.apache.pdfbox.pdmodel.graphics.color.PDColorSpace;
 import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
@@ -59,9 +66,6 @@ import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotation;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceStream;
 import org.apache.pdfbox.util.Matrix;
 import org.apache.pdfbox.util.Vector;
-import org.apache.pdfbox.contentstream.operator.Operator;
-import org.apache.pdfbox.contentstream.operator.OperatorProcessor;
-import org.apache.pdfbox.pdmodel.graphics.blend.BlendMode;
 
 /**
  * Processes a PDF content stream and executes certain operations.
@@ -453,7 +457,7 @@ public abstract class PDFStreamEngine
      * @param contentStream the content stream
      * @throws IOException if there is an exception while processing the stream
      */
-    private void processStream(PDContentStream contentStream) throws IOException
+    protected void processStream(PDContentStream contentStream) throws IOException
     {
         PDResources parent = pushResources(contentStream);
         Stack<PDGraphicsState> savedStack = saveGraphicsStack();
@@ -482,13 +486,17 @@ public abstract class PDFStreamEngine
      * @param contentStream to content stream to parse.
      * @throws IOException if there is an error reading or parsing the content stream.
      */
-    private void processStreamOperators(PDContentStream contentStream) throws IOException
+    protected void processStreamOperators(PDContentStream contentStream) throws IOException
     {
         List<COSBase> arguments = new ArrayList<>();
         PDFStreamParser parser = new PDFStreamParser(contentStream.getContents());
         Object token = parser.parseNextToken();
+        List<Object> newTokens = new ArrayList<>();
+        List<Object> partialTokens = new ArrayList<>();
+        boolean isModified = false;
         while (token != null)
         {
+        	partialTokens.add(token);
             if (token instanceof COSObject)
             {
                 arguments.add(((COSObject) token).getObject());
@@ -496,7 +504,17 @@ public abstract class PDFStreamEngine
             else if (token instanceof Operator)
             {
                 processOperator((Operator) token, arguments);
+                REWRITE rewrite = rewriteContentStream((Operator) token, arguments);
+            	if(rewrite == null || rewrite == REWRITE.NOOPS){
+            		newTokens.addAll(partialTokens);
+            	}else if(rewrite == REWRITE.DELETE || rewrite == REWRITE.REPLACE){
+            		isModified = true;
+            		if(rewrite == REWRITE.REPLACE){
+            			newTokens.addAll(partialTokens);
+            		}
+            	}
                 arguments = new ArrayList<>();
+                partialTokens = new ArrayList<>();
             }
             else
             {
@@ -504,7 +522,45 @@ public abstract class PDFStreamEngine
             }
             token = parser.parseNextToken();
         }
+        if(isModified && getDocument() != null){
+       	 if(contentStream instanceof PDPage){
+            	PDStream newContents = new PDStream(getDocument());
+            	OutputStream os = null;
+            	try{
+            		os = newContents.createOutputStream();
+            		ContentStreamWriter writer = new ContentStreamWriter( os );
+                   writer.writeTokens(newTokens);
+            	}finally{
+            		os.close();
+            	}
+            	((PDPage)contentStream).setContents( newContents );	
+        	}else if(contentStream instanceof PDContentStream){
+        		PDStream newContents = ((PDFormXObject)contentStream).getContentStream();
+        		OutputStream os = null;
+            	try{
+            		os = newContents.createOutputStream();
+            		ContentStreamWriter writer = new ContentStreamWriter( os );
+                    writer.writeTokens(newTokens);
+                    
+            	}finally{
+            		os.close();
+            	}
+        	}
+       }
     }
+    
+    protected PDDocument getDocument(){
+    	return null;
+    }
+    
+    public static enum REWRITE 
+    { 
+        DELETE, REPLACE, NOOPS; 
+    }
+
+    protected REWRITE rewriteContentStream(Operator token, List<COSBase> arguments) throws IOException {
+		return REWRITE.NOOPS;
+	}
 
     /**
      * Pushes the given stream's resources, returning the previous resources.
