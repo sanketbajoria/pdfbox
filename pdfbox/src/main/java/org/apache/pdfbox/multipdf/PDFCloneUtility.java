@@ -37,7 +37,7 @@ import org.apache.pdfbox.pdmodel.common.COSObjectable;
  * already cloned.
  *
  */
-class PDFCloneUtility
+public class PDFCloneUtility
 {
     private final PDDocument destination;
     private final Map<Object,COSBase> clonedVersion = new HashMap<>();
@@ -46,7 +46,7 @@ class PDFCloneUtility
      * Creates a new instance for the given target document.
      * @param dest the destination PDF document that will receive the clones
      */
-    PDFCloneUtility(PDDocument dest)
+    public PDFCloneUtility(PDDocument dest)
     {
         this.destination = dest;
     }
@@ -67,7 +67,7 @@ class PDFCloneUtility
      * @return the cloned instance of the base object
      * @throws IOException if an I/O error occurs
      */
-      COSBase cloneForNewDocument( Object base ) throws IOException
+      public COSBase cloneForNewDocument( Object base ) throws IOException
       {
           if( base == null )
           {
