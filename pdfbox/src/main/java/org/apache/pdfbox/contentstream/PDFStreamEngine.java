@@ -35,11 +35,7 @@ import org.apache.pdfbox.contentstream.operator.MissingOperandException;
 import org.apache.pdfbox.contentstream.operator.Operator;
 import org.apache.pdfbox.contentstream.operator.OperatorProcessor;
 import org.apache.pdfbox.contentstream.operator.state.EmptyGraphicsStackException;
-import org.apache.pdfbox.cos.COSArray;
-import org.apache.pdfbox.cos.COSBase;
-import org.apache.pdfbox.cos.COSNumber;
-import org.apache.pdfbox.cos.COSObject;
-import org.apache.pdfbox.cos.COSString;
+import org.apache.pdfbox.cos.*;
 import org.apache.pdfbox.filter.MissingImageReaderException;
 import org.apache.pdfbox.pdfparser.PDFStreamParser;
 import org.apache.pdfbox.pdfwriter.ContentStreamWriter;
@@ -504,7 +500,7 @@ public abstract class PDFStreamEngine
             else if (token instanceof Operator)
             {
                 processOperator((Operator) token, arguments);
-                REWRITE rewrite = rewriteContentStream((Operator) token, arguments);
+                REWRITE rewrite = rewriteContentStream((Operator) token, arguments, partialTokens);
             	if(rewrite == null || rewrite == REWRITE.NOOPS){
             		newTokens.addAll(partialTokens);
             	}else if(rewrite == REWRITE.DELETE || rewrite == REWRITE.REPLACE){
@@ -527,7 +523,7 @@ public abstract class PDFStreamEngine
             	PDStream newContents = new PDStream(getDocument());
             	OutputStream os = null;
             	try{
-            		os = newContents.createOutputStream();
+            		os = newContents.createOutputStream(/*COSName.FLATE_DECODE*/);
             		ContentStreamWriter writer = new ContentStreamWriter( os );
                    writer.writeTokens(newTokens);
             	}finally{
@@ -538,7 +534,7 @@ public abstract class PDFStreamEngine
         		PDStream newContents = ((PDFormXObject)contentStream).getContentStream();
         		OutputStream os = null;
             	try{
-            		os = newContents.createOutputStream();
+            		os = newContents.createOutputStream(/*COSName.FLATE_DECODE*/);
             		ContentStreamWriter writer = new ContentStreamWriter( os );
                     writer.writeTokens(newTokens);
                     
@@ -555,10 +551,10 @@ public abstract class PDFStreamEngine
     
     public static enum REWRITE 
     { 
-        DELETE, REPLACE, NOOPS; 
+        DELETE, REPLACE, NOOPS;
     }
 
-    protected REWRITE rewriteContentStream(Operator token, List<COSBase> arguments) throws IOException {
+    protected REWRITE rewriteContentStream(Operator token, List<COSBase> arguments, List<Object> partialTokens) throws IOException {
 		return REWRITE.NOOPS;
 	}
 

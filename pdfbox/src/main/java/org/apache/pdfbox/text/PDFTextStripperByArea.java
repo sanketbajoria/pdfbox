@@ -103,6 +103,10 @@ public class PDFTextStripperByArea extends PDFTextStripper
         return text.toString();
     }
 
+    public ArrayList<List<TextPosition>> getTextPositionForRegion(String regionName) {
+        return regionCharacterList.get( regionName );
+    }
+
     /**
      * Process the page to extract the region text.
      *

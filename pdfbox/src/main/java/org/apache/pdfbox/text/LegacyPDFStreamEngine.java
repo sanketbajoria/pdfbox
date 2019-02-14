@@ -323,7 +323,7 @@ class LegacyPDFStreamEngine extends PDFStreamEngine
                 pageSize.getHeight(), translatedTextRenderingMatrix, nextX, nextY,
                 Math.abs(dyDisplay), dxDisplay,
                 Math.abs(spaceWidthDisplay), unicode, new int[] { code } , font, fontSize,
-                (int)(fontSize * textMatrix.getScalingFactorX())));
+                (int)(fontSize * textMatrix.getScalingFactorX()), state.getStrokingColor(), state.getNonStrokingColor()));
     }
 
     /**

@@ -892,7 +892,7 @@ public class PDDocument implements Closeable
     /**
      * Returns the list of fonts which will be subset before the document is saved.
      */
-    Set<PDFont> getFontsToSubset()
+    public Set<PDFont> getFontsToSubset()
     {
         return fontsToSubset;
     }

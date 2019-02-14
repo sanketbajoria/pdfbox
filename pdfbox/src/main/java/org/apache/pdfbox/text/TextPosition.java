@@ -23,6 +23,7 @@ import java.util.Map;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.graphics.color.PDColor;
 import org.apache.pdfbox.util.Matrix;
 
 /**
@@ -63,6 +64,17 @@ public final class TextPosition
     private String unicode;
     private float direction = -1;
 
+    private PDColor strokingColor;
+    private PDColor nonStrokingColor;
+
+    public PDColor getStrokingColor() {
+        return strokingColor;
+    }
+
+    public PDColor getNonStrokingColor() {
+        return nonStrokingColor;
+    }
+
     /**
      * Constructor.
      *
@@ -84,7 +96,7 @@ public final class TextPosition
     public TextPosition(int pageRotation, float pageWidth, float pageHeight, Matrix textMatrix,
                         float endX, float endY, float maxHeight, float individualWidth,
                         float spaceWidth, String unicode, int[] charCodes, PDFont font,
-                        float fontSize, int fontSizeInPt)
+                        float fontSize, int fontSizeInPt, PDColor strokingColor, PDColor nonStrokingColor)
     {
         this.textMatrix = textMatrix;
 
@@ -115,6 +127,9 @@ public final class TextPosition
         {
             y = this.pageWidth - getYLowerLeftRot(rotationAngle);
         }
+
+        this.strokingColor = strokingColor;
+        this.nonStrokingColor = nonStrokingColor;
     }
 
     // Adds non-decomposing diacritics to the hash with their related combining character.
