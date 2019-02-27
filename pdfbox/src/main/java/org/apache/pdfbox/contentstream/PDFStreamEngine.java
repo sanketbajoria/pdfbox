@@ -37,6 +37,7 @@ import org.apache.pdfbox.contentstream.operator.OperatorProcessor;
 import org.apache.pdfbox.contentstream.operator.state.EmptyGraphicsStackException;
 import org.apache.pdfbox.cos.*;
 import org.apache.pdfbox.filter.MissingImageReaderException;
+import org.apache.pdfbox.multipdf.PDFCloneUtility;
 import org.apache.pdfbox.pdfparser.PDFStreamParser;
 import org.apache.pdfbox.pdfwriter.ContentStreamWriter;
 import org.apache.pdfbox.pdmodel.MissingResourceException;
@@ -50,6 +51,7 @@ import org.apache.pdfbox.pdmodel.font.PDFontFactory;
 import org.apache.pdfbox.pdmodel.font.PDType3CharProc;
 import org.apache.pdfbox.pdmodel.font.PDType3Font;
 import org.apache.pdfbox.pdmodel.graphics.PDLineDashPattern;
+import org.apache.pdfbox.pdmodel.graphics.PDXObject;
 import org.apache.pdfbox.pdmodel.graphics.blend.BlendMode;
 import org.apache.pdfbox.pdmodel.graphics.color.PDColor;
 import org.apache.pdfbox.pdmodel.graphics.color.PDColorSpace;
@@ -476,6 +478,8 @@ public abstract class PDFStreamEngine
         popResources(parent);
     }
 
+    protected Stack<PDContentStream> trackContentStream = new Stack<>();
+
     /**
      * Processes the operators of the given content stream.
      *
@@ -484,12 +488,14 @@ public abstract class PDFStreamEngine
      */
     protected void processStreamOperators(PDContentStream contentStream) throws IOException
     {
+        trackContentStream.push(contentStream);
         List<COSBase> arguments = new ArrayList<>();
         PDFStreamParser parser = new PDFStreamParser(contentStream.getContents());
         Object token = parser.parseNextToken();
         List<Object> newTokens = new ArrayList<>();
         List<Object> partialTokens = new ArrayList<>();
         boolean isModified = false;
+
         while (token != null)
         {
         	partialTokens.add(token);
@@ -530,19 +536,31 @@ public abstract class PDFStreamEngine
             		os.close();
             	}
             	((PDPage)contentStream).setContents( newContents );	
-        	}else if(contentStream instanceof PDContentStream){
-        		PDStream newContents = ((PDFormXObject)contentStream).getContentStream();
-        		OutputStream os = null;
-            	try{
-            		os = newContents.createOutputStream(/*COSName.FLATE_DECODE*/);
-            		ContentStreamWriter writer = new ContentStreamWriter( os );
-                    writer.writeTokens(newTokens);
-                    
-            	}finally{
-            		os.close();
-            	}
+        	}else if(contentStream instanceof PDFormXObject){
+       	        cloneFormObject((PDFormXObject) trackContentStream.get(1), ((PDFormXObject)contentStream).getCOSObject(), newTokens);
+//        		PDStream newContents = ((PDFormXObject)contentStream).getContentStream();
+//        		OutputStream os = null;
+//            	try{
+//            		os = newContents.createOutputStream(/*COSName.FLATE_DECODE*/);
+//            		ContentStreamWriter writer = new ContentStreamWriter( os );
+//                    writer.writeTokens(newTokens);
+//
+//            	}finally{
+//            		os.close();
+//            	}
         	}
        }
+       trackContentStream.pop();
+    }
+
+    private void cloneFormObject(PDFormXObject oldObject, COSStream cosStream, List<Object> newTokens) throws IOException {
+        PDFCloneUtility cloneUtility = new PDFCloneUtility(getDocument());
+        COSDictionary dict = (COSDictionary)getCurrentPage().getResources().getCOSObject().getDictionaryObject(COSName.XOBJECT);
+        COSName name = dict.getKeyForValue(oldObject.getCOSObject());
+        if (dict != null && name != null)
+        {
+            dict.setItem(name, cloneUtility.cloneForNewDocument(oldObject, cosStream, newTokens).getCOSObject());
+        }
     }
     
     protected PDDocument getDocument(){

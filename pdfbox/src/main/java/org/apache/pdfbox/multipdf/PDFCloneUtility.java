@@ -29,8 +29,11 @@ import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.cos.COSObject;
 import org.apache.pdfbox.cos.COSStream;
 import org.apache.pdfbox.io.IOUtils;
+import org.apache.pdfbox.pdfwriter.ContentStreamWriter;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.common.COSObjectable;
+import org.apache.pdfbox.pdmodel.common.PDStream;
+import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 
 /**
  * Utility class used to clone PDF objects. It keeps track of objects it has
@@ -145,6 +148,105 @@ public class PDFCloneUtility
           clonedVersion.put( base, retval );
           return retval;
       }
+
+    public COSBase cloneForNewDocument( Object base, COSStream oldStream, List<Object> newTokens ) throws IOException
+    {
+        if( base == null )
+        {
+            return null;
+        }
+        COSBase retval = clonedVersion.get(base);
+        if( retval != null )
+        {
+            //we are done, it has already been converted.
+        }
+        else if( base instanceof List)
+        {
+            COSArray array = new COSArray();
+            List<?> list = (List<?>) base;
+            for (Object obj : list)
+            {
+                array.add(cloneForNewDocument(obj, oldStream, newTokens));
+            }
+            retval = array;
+        }
+        else if( base instanceof COSObjectable && !(base instanceof COSBase) )
+        {
+            retval = cloneForNewDocument( ((COSObjectable)base).getCOSObject(), oldStream, newTokens );
+            clonedVersion.put( base, retval );
+        }
+        else if( base instanceof COSObject )
+        {
+            COSObject object = (COSObject)base;
+            retval = cloneForNewDocument( object.getObject(), oldStream, newTokens );
+            clonedVersion.put( base, retval );
+        }
+        else if( base instanceof COSArray )
+        {
+            COSArray newArray = new COSArray();
+            COSArray array = (COSArray)base;
+            for( int i=0; i<array.size(); i++ )
+            {
+                newArray.add( cloneForNewDocument( array.get( i ), oldStream, newTokens ) );
+            }
+            retval = newArray;
+            clonedVersion.put( base, retval );
+        }
+        else if( base instanceof COSStream )
+        {
+            COSStream originalStream = (COSStream)base;
+            COSBase type = originalStream.getItem(COSName.TYPE);
+            COSBase subType = originalStream.getItem(COSName.SUBTYPE);
+            if(COSName.XOBJECT.equals(type) && COSName.FORM.equals(subType)){
+                COSStream stream = destination.getDocument().createCOSStream();
+                try (OutputStream output = stream.createRawOutputStream();
+                     InputStream input = originalStream.createRawInputStream())
+                {
+                    IOUtils.copy(input, output);
+                }
+                clonedVersion.put( base, stream );
+                for( Map.Entry<COSName, COSBase> entry :  originalStream.entrySet() )
+                {
+                    stream.setItem(entry.getKey(), cloneForNewDocument(entry.getValue(), oldStream, newTokens));
+                }
+                retval = stream;
+
+                if(oldStream != null && base == oldStream){
+                    OutputStream os = null;
+                    PDStream newContents = new PDStream(stream);
+                    try{
+                        os = newContents.createOutputStream(/*COSName.FLATE_DECODE*/);
+                        ContentStreamWriter writer = new ContentStreamWriter( os );
+                        writer.writeTokens(newTokens);
+                    }finally{
+                        os.close();
+                    }
+                }
+            }else{
+                clonedVersion.put( base, originalStream );
+                retval = originalStream;
+            }
+
+        }
+        else if( base instanceof COSDictionary )
+        {
+            COSDictionary dic = (COSDictionary)base;
+            retval = new COSDictionary();
+            clonedVersion.put( base, retval );
+            for( Map.Entry<COSName, COSBase> entry : dic.entrySet() )
+            {
+                ((COSDictionary)retval).setItem(
+                        entry.getKey(),
+                        cloneForNewDocument(entry.getValue(), oldStream, newTokens));
+            }
+        }
+        else
+        {
+            retval = (COSBase)base;
+        }
+        clonedVersion.put( base, retval );
+        return retval;
+    }
 
       /**
        * Merges two objects of the same type by deep-cloning its members.

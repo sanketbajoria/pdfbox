@@ -58,6 +58,7 @@ import org.apache.pdfbox.pdmodel.graphics.color.PDICCBased;
 import org.apache.pdfbox.pdmodel.graphics.color.PDPattern;
 import org.apache.pdfbox.pdmodel.graphics.color.PDSeparation;
 import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImage;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.pdmodel.graphics.image.PDInlineImage;
 import org.apache.pdfbox.pdmodel.graphics.shading.PDShading;
@@ -475,7 +476,22 @@ abstract class PDAbstractContentStream implements Closeable
      * @throws IOException If there is an error writing to the stream.
      * @throws IllegalStateException If the method was called within a text block.
      */
-    public void drawImage(PDInlineImage inlineImage, float x, float y, float width, float height) throws IOException
+
+    public void drawImage(PDInlineImage inlineImage, float x, float y, float width, float height) throws IOException {
+        drawImage(inlineImage, new Matrix(width, 0, 0, height, x, y));
+    }
+
+    public void drawImage(PDImage image, Matrix matrix) throws IOException {
+        if(image instanceof  PDImageXObject){
+            drawImage((PDImageXObject) image, matrix);
+        }else if (image instanceof  PDInlineImage){
+            drawImage((PDInlineImage) image , matrix);
+        }
+
+    }
+
+
+    public void drawImage(PDInlineImage inlineImage, Matrix matrix) throws IOException
     {
         if (inTextMode)
         {
@@ -483,7 +499,7 @@ abstract class PDAbstractContentStream implements Closeable
         }
 
         saveGraphicsState();
-        transform(new Matrix(width, 0, 0, height, x, y));
+        transform(matrix);
 
         // create the image dictionary
         StringBuilder sb = new StringBuilder();
