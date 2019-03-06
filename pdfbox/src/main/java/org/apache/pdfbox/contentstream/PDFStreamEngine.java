@@ -529,7 +529,7 @@ public abstract class PDFStreamEngine
             	PDStream newContents = new PDStream(getDocument());
             	OutputStream os = null;
             	try{
-            		os = newContents.createOutputStream(/*COSName.FLATE_DECODE*/);
+            		os = newContents.createOutputStream(COSName.FLATE_DECODE);
             		ContentStreamWriter writer = new ContentStreamWriter( os );
                    writer.writeTokens(newTokens);
             	}finally{
