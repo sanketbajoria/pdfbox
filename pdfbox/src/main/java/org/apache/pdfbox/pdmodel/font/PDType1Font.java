@@ -117,7 +117,7 @@ public class PDType1Font extends PDSimpleFont implements PDVectorFont
      *
      * @param baseFont One of the standard 14 PostScript names
      */
-    private PDType1Font(String baseFont)
+    public PDType1Font(String baseFont)
     {
         super(baseFont);
         

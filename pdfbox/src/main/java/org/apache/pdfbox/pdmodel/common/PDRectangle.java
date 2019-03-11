@@ -35,10 +35,10 @@ import org.apache.pdfbox.util.Matrix;
 public class PDRectangle implements COSObjectable
 {
     /** user space units per inch */
-    private static final float POINTS_PER_INCH = 72;
+    public static final float POINTS_PER_INCH = 72;
     
     /** user space units per millimeter */
-    private static final float POINTS_PER_MM = 1 / (10 * 2.54f) * POINTS_PER_INCH;
+    public static final float POINTS_PER_MM = 1 / (10 * 2.54f) * POINTS_PER_INCH;
 
     /** A rectangle the size of U.S. Letter, 8.5" x 11". */
     public static final PDRectangle LETTER = new PDRectangle(8.5f * POINTS_PER_INCH,
