@@ -335,6 +335,48 @@ public class Overlay implements Closeable
         return contentStreams;
     }
 
+    private LayoutPage getLayoutPage(PDPage overlayPage) throws IOException
+    {
+        COSBase contents = overlayPage.getCOSObject().getDictionaryObject(COSName.CONTENTS);
+        PDResources resources = overlayPage.getResources();
+        if (resources == null)
+        {
+            resources = new PDResources();
+        }
+        return new Overlay.LayoutPage(overlayPage.getMediaBox(), createCombinedContentStream(contents),
+                resources.getCOSObject());
+    }
+
+    public void processPage(PDPage page, PDPage overlayPage) throws IOException
+    {
+        COSDictionary pageDictionary = page.getCOSObject();
+        COSBase originalContent = pageDictionary.getDictionaryObject(COSName.CONTENTS);
+        COSArray newContentArray = new COSArray();
+        Overlay.LayoutPage layoutPage = getLayoutPage(overlayPage);
+
+        switch (position)
+        {
+            case FOREGROUND:
+                // save state
+                newContentArray.add(createStream("q\n"));
+                addOriginalContent(originalContent, newContentArray);
+                // restore state
+                newContentArray.add(createStream("Q\n"));
+                // overlay content last
+                overlayPage(page, layoutPage, newContentArray);
+                break;
+            case BACKGROUND:
+                // overlay content first
+                overlayPage(page, layoutPage, newContentArray);
+
+                addOriginalContent(originalContent, newContentArray);
+                break;
+            default:
+                throw new IOException("Unknown type of position:" + position);
+        }
+        pageDictionary.setItem(COSName.CONTENTS, newContentArray);
+    }
+
     private void processPages(PDDocument document) throws IOException
     {
         int pageCounter = 0;
