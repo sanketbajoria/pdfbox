@@ -67,12 +67,23 @@ public final class TextPosition
     private PDColor strokingColor;
     private PDColor nonStrokingColor;
 
+    private double alphaConstant;
+    private double nonStrokeAlphaConstant;
+
     public PDColor getStrokingColor() {
         return strokingColor;
     }
 
     public PDColor getNonStrokingColor() {
         return nonStrokingColor;
+    }
+
+    public double getAlphaConstant() {
+        return alphaConstant;
+    }
+
+    public double getNonStrokeAlphaConstant() {
+        return nonStrokeAlphaConstant;
     }
 
     /**
@@ -96,7 +107,7 @@ public final class TextPosition
     public TextPosition(int pageRotation, float pageWidth, float pageHeight, Matrix textMatrix,
                         float endX, float endY, float maxHeight, float individualWidth,
                         float spaceWidth, String unicode, int[] charCodes, PDFont font,
-                        float fontSize, int fontSizeInPt, PDColor strokingColor, PDColor nonStrokingColor)
+                        float fontSize, int fontSizeInPt, PDColor strokingColor, PDColor nonStrokingColor, double alphaConstant, double nonStrokeAlphaConstant)
     {
         this.textMatrix = textMatrix;
 
@@ -130,6 +141,8 @@ public final class TextPosition
 
         this.strokingColor = strokingColor;
         this.nonStrokingColor = nonStrokingColor;
+        this.alphaConstant = alphaConstant;
+        this.nonStrokeAlphaConstant = nonStrokeAlphaConstant;
     }
 
     // Adds non-decomposing diacritics to the hash with their related combining character.
