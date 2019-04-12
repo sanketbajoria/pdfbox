@@ -24,6 +24,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.graphics.color.PDColor;
+import org.apache.pdfbox.pdmodel.graphics.state.PDGraphicsState;
 import org.apache.pdfbox.util.Matrix;
 
 /**
@@ -70,6 +71,14 @@ public final class TextPosition
     private double alphaConstant;
     private double nonStrokeAlphaConstant;
 
+    private Matrix originalTextMatrix;
+
+    public Matrix getOriginalCTM() {
+        return originalCTM;
+    }
+
+    private Matrix originalCTM;
+
     public PDColor getStrokingColor() {
         return strokingColor;
     }
@@ -84,6 +93,16 @@ public final class TextPosition
 
     public double getNonStrokeAlphaConstant() {
         return nonStrokeAlphaConstant;
+    }
+
+    public Matrix getOriginalTextMatrix() {
+        return originalTextMatrix;
+    }
+
+    public PDGraphicsState graphicsState;
+
+    public PDGraphicsState getGraphicsState() {
+        return graphicsState;
     }
 
     /**
@@ -107,7 +126,8 @@ public final class TextPosition
     public TextPosition(int pageRotation, float pageWidth, float pageHeight, Matrix textMatrix,
                         float endX, float endY, float maxHeight, float individualWidth,
                         float spaceWidth, String unicode, int[] charCodes, PDFont font,
-                        float fontSize, int fontSizeInPt, PDColor strokingColor, PDColor nonStrokingColor, double alphaConstant, double nonStrokeAlphaConstant)
+                        float fontSize, int fontSizeInPt, PDColor strokingColor, PDColor nonStrokingColor,
+                        double alphaConstant, double nonStrokeAlphaConstant, Matrix originalTextMatrix, Matrix originalCTM, PDGraphicsState graphicsState)
     {
         this.textMatrix = textMatrix;
 
@@ -143,6 +163,9 @@ public final class TextPosition
         this.nonStrokingColor = nonStrokingColor;
         this.alphaConstant = alphaConstant;
         this.nonStrokeAlphaConstant = nonStrokeAlphaConstant;
+        this.originalTextMatrix = originalTextMatrix;
+        this.originalCTM = originalCTM;
+        this.graphicsState = graphicsState;
     }
 
     // Adds non-decomposing diacritics to the hash with their related combining character.

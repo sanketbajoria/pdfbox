@@ -36,6 +36,7 @@ import java.io.IOException;
 
 import org.apache.fontbox.ttf.TrueTypeFont;
 import org.apache.fontbox.util.BoundingBox;
+import org.apache.pdfbox.pdmodel.graphics.state.PDTextState;
 import org.apache.pdfbox.util.Matrix;
 import org.apache.pdfbox.util.Vector;
 import org.apache.pdfbox.contentstream.operator.DrawObject;
@@ -323,8 +324,25 @@ class LegacyPDFStreamEngine extends PDFStreamEngine
                 pageSize.getHeight(), translatedTextRenderingMatrix, nextX, nextY,
                 Math.abs(dyDisplay), dxDisplay,
                 Math.abs(spaceWidthDisplay), unicode, new int[] { code } , font, fontSize,
-                (int)(fontSize * textMatrix.getScalingFactorX()), state.getStrokingColor(), state.getNonStrokingColor(), state.getAlphaConstant(), state.getNonStrokeAlphaConstant()));
+                (int)(fontSize * textMatrix.getScalingFactorX()), state.getStrokingColor(),
+                state.getNonStrokingColor(), state.getAlphaConstant(),
+                state.getNonStrokeAlphaConstant(), getTextMatrix().clone(), state.getCurrentTransformationMatrix(), state));
     }
+
+    /*private Matrix getCurrentTransformationMatrix(){
+        PDGraphicsState state = getGraphicsState();
+        PDTextState textState = state.getTextState();
+        Matrix ctm = state.getCurrentTransformationMatrix();
+        float fontSize = textState.getFontSize();
+        float horizontalScaling = textState.getHorizontalScaling() / 100f;
+        Matrix parameters = new Matrix(
+                fontSize * horizontalScaling, 0, // 0
+                0, fontSize,                     // 0
+                0, textState.getRise());         // 1
+
+        return parameters.concatenate(ctm).concatenate;
+
+    }*/
 
     /**
      * A method provided as an event interface to allow a subclass to perform some specific
