@@ -506,7 +506,7 @@ public abstract class PDFStreamEngine
             else if (token instanceof Operator)
             {
                 processOperator((Operator) token, arguments);
-                REWRITE rewrite = rewriteContentStream((Operator) token, arguments, partialTokens);
+                REWRITE rewrite = rewriteContentStream((Operator) token, arguments, partialTokens, contentStream);
             	if(rewrite == null || rewrite == REWRITE.NOOPS){
             		newTokens.addAll(partialTokens);
             	}else if(rewrite == REWRITE.DELETE || rewrite == REWRITE.REPLACE){
@@ -572,7 +572,7 @@ public abstract class PDFStreamEngine
         DELETE, REPLACE, NOOPS;
     }
 
-    protected REWRITE rewriteContentStream(Operator token, List<COSBase> arguments, List<Object> partialTokens) throws IOException {
+    protected REWRITE rewriteContentStream(Operator token, List<COSBase> arguments, List<Object> partialTokens, PDContentStream contentStream) throws IOException {
 		return REWRITE.NOOPS;
 	}
 
