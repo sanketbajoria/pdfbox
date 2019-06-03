@@ -25,8 +25,10 @@ import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSBase;
 import org.apache.pdfbox.cos.COSDictionary;
@@ -62,7 +64,7 @@ public class Overlay implements Closeable
     private LayoutPage oddPageOverlayPage;
     private LayoutPage evenPageOverlayPage;
 
-    private final Map<Integer, PDDocument> specificPageOverlay = new HashMap<>();
+    private final Set<PDDocument> openDocuments = new HashSet<>();
     private Map<Integer, LayoutPage> specificPageOverlayPage = new HashMap<>();
 
     private Position position = Position.BACKGROUND;
@@ -94,8 +96,8 @@ public class Overlay implements Closeable
     /**
      * This will add overlays to a document.
      *
-     * @param specificPageOverlayFile map of overlay files for specific pages. The page numbers are
-     * 1-based.
+     * @param specificPageOverlayFile Optional map of overlay files for specific pages. The page
+     * numbers are 1-based. The map must be empty (but not null) if no specific mappings are used.
      *
      * @return The modified input PDF document, which has to be saved and closed by the caller. If
      * the input document was passed by {@link #setInputPDF(PDDocument) setInputPDF(PDDocument)}
@@ -117,7 +119,7 @@ public class Overlay implements Closeable
                 loadedDocuments.put(e.getValue(), doc);
                 layouts.put(doc, getLayoutPage(doc));
             }
-            specificPageOverlay.put(e.getKey(), doc);
+            openDocuments.add(doc);
             specificPageOverlayPage.put(e.getKey(), layouts.get(doc));
         }
         processPages(inputPDFDocument);
@@ -125,8 +127,36 @@ public class Overlay implements Closeable
     }
 
     /**
-     * Close all input pdfs which were used for the overlay.
-     * 
+     * This will add overlays documents to a document.
+     *
+     * @param specificPageOverlayDocuments Optional map of overlay documents for specific pages. The
+     * page numbers are 1-based. The map must be empty (but not null) if no specific mappings are
+     * used.
+     *
+     * @return The modified input PDF document, which has to be saved and closed by the caller. If
+     * the input document was passed by {@link #setInputPDF(PDDocument) setInputPDF(PDDocument)}
+     * then it is that object that is returned.
+     *
+     * @throws IOException if something went wrong
+     */
+    public PDDocument overlayDocuments(Map<Integer, PDDocument> specificPageOverlayDocuments) throws IOException
+    {
+        loadPDFs();
+        for (Map.Entry<Integer, PDDocument> e : specificPageOverlayDocuments.entrySet())
+        {
+            PDDocument doc = e.getValue();
+            if (doc != null)
+            {
+                specificPageOverlayPage.put(e.getKey(), getLayoutPage(doc));
+            }
+        }
+        processPages(inputPDFDocument);
+        return inputPDFDocument;
+    }
+
+    /**
+     * Close all input documents which were used for the overlay and opened by this class.
+     *
      * @throws IOException if something went wrong
      */
     @Override
@@ -156,15 +186,12 @@ public class Overlay implements Closeable
         {
             evenPageOverlay.close();
         }
-        if (specificPageOverlay != null)
+        for (PDDocument doc : openDocuments)
         {
-            for (Map.Entry<Integer, PDDocument> e : specificPageOverlay.entrySet())
-            {
-                e.getValue().close();
-            }
-            specificPageOverlay.clear();
-            specificPageOverlayPage.clear();
+            doc.close();
         }
+        openDocuments.clear();
+        specificPageOverlayPage.clear();
     }
 
     private void loadPDFs() throws IOException

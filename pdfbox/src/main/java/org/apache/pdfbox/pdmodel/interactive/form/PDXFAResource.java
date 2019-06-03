@@ -21,17 +21,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-
 import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSBase;
 import org.apache.pdfbox.cos.COSStream;
 import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.pdmodel.common.COSObjectable;
 import org.w3c.dom.Document;
-import org.xml.sax.SAXException;
 
 /**
  * An XML Forms Architecture (XFA) resource.
@@ -131,22 +126,12 @@ public final class PDXFAResource implements COSObjectable
      * 
      * @return the XFA content
      * 
-     * @throws ParserConfigurationException parser exception.
-     * @throws SAXException parser exception.
      * @throws IOException if something went wrong when reading the XFA content.
      * 
      */        
-    public Document getDocument() throws ParserConfigurationException, SAXException, IOException 
+    public Document getDocument() throws IOException
     {
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
-        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
-        factory.setXIncludeAware(false);
-        factory.setExpandEntityReferences(false);
-        factory.setNamespaceAware(true);
-        DocumentBuilder builder = factory.newDocumentBuilder();
-        return builder.parse(new ByteArrayInputStream(this.getBytes()));
+        return org.apache.pdfbox.util.XMLUtil //
+                .parse(new ByteArrayInputStream(this.getBytes()), true);
     }
 }

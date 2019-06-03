@@ -18,7 +18,6 @@ package org.apache.pdfbox.pdmodel.font;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -108,13 +107,12 @@ final class FontMapperImpl implements FontMapper
         
         try
         {
-            String ttfName = "org/apache/pdfbox/resources/ttf/LiberationSans-Regular.ttf";
-            URL url = FontMapper.class.getClassLoader().getResource(ttfName);
-            if (url == null)
+            String ttfName = "/org/apache/pdfbox/resources/ttf/LiberationSans-Regular.ttf";
+            InputStream ttfStream = FontMapper.class.getResourceAsStream(ttfName);
+            if (ttfStream == null)
             {
                 throw new IOException("Error loading resource: " + ttfName);
             }
-            InputStream ttfStream = url.openStream();
             TTFParser ttfParser = new TTFParser();
             lastResortFont = ttfParser.parse(ttfStream);
         }

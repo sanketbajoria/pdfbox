@@ -16,6 +16,7 @@
  */
 package org.apache.pdfbox.tools;
 
+import java.awt.RenderingHints;
 import java.awt.print.PrinterException;
 import java.awt.print.PrinterJob;
 import java.io.File;
@@ -24,10 +25,8 @@ import java.util.HashMap;
 import java.util.Map;
 import javax.print.PrintService;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
 import org.apache.pdfbox.printing.Orientation;
 import org.apache.pdfbox.printing.PDFPageable;
 
@@ -38,14 +37,13 @@ import org.apache.pdfbox.printing.PDFPageable;
  */
 public final class PrintPDF
 {
-    private static final Log LOG = LogFactory.getLog(PrintPDF.class);
-
     private static final String PASSWORD = "-password";
     private static final String SILENT = "-silentPrint";
     private static final String PRINTER_NAME = "-printerName";
     private static final String ORIENTATION = "-orientation";
     private static final String BORDER = "-border";
     private static final String DPI = "-dpi";
+    private static final String NOCOLOROPT = "-noColorOpt";
 
     /**
      * private constructor.
@@ -64,17 +62,6 @@ public final class PrintPDF
      */
     public static void main(String[] args) throws PrinterException, IOException
     {
-        try
-        {
-            // force KCMS (faster than LCMS) if available
-            Class.forName("sun.java2d.cmm.kcms.KcmsServiceProvider");
-            System.setProperty("sun.java2d.cmm", "sun.java2d.cmm.kcms.KcmsServiceProvider");
-        }
-        catch (ClassNotFoundException e)
-        {
-            LOG.debug("KCMS service not found - using LCMS", e);
-        }
-
         // suppress the Dock icon on OS X
         System.setProperty("apple.awt.UIElement", "true");
 
@@ -89,6 +76,8 @@ public final class PrintPDF
         orientationMap.put("auto", Orientation.AUTO);
         orientationMap.put("landscape", Orientation.LANDSCAPE);
         orientationMap.put("portrait", Orientation.PORTRAIT);
+        RenderingHints renderingHints = null;
+
         for (int i = 0; i < args.length; i++)
         {
             switch (args[i])
@@ -135,6 +124,15 @@ public final class PrintPDF
                     }
                     dpi = Integer.parseInt(args[i]);
                     break;
+                case NOCOLOROPT:
+                    renderingHints = new RenderingHints(null);
+                    renderingHints.put(RenderingHints.KEY_INTERPOLATION,
+                                       RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+                    renderingHints.put(RenderingHints.KEY_RENDERING,
+                                       RenderingHints.VALUE_RENDER_QUALITY);
+                    renderingHints.put(RenderingHints.KEY_ANTIALIASING,
+                                       RenderingHints.VALUE_ANTIALIAS_OFF);
+                    break;
                 default:
                     pdfFile = args[i];
                     break;
@@ -148,24 +146,42 @@ public final class PrintPDF
 
         try (PDDocument document = PDDocument.load(new File(pdfFile), password))
         {
+            AccessPermission ap = document.getCurrentAccessPermission();
+            if (!ap.canPrint())
+            {
+                throw new IOException("You do not have permission to print");
+            }
+
             PrinterJob printJob = PrinterJob.getPrinterJob();
             printJob.setJobName(new File(pdfFile).getName());
 
             if (printerName != null)
             {
-                PrintService[] printService = PrinterJob.lookupPrintServices();
+                PrintService[] printServices = PrinterJob.lookupPrintServices();
                 boolean printerFound = false;
-                for (int i = 0; !printerFound && i < printService.length; i++)
+                for (int i = 0; !printerFound && i < printServices.length; i++)
                 {
-                    if (printService[i].getName().contains(printerName))
+                    if (printServices[i].getName().equals(printerName))
                     {
-                        printJob.setPrintService(printService[i]);
+                        printJob.setPrintService(printServices[i]);
                         printerFound = true;
                     }
                 }
+                if (!printerFound)
+                {
+                    System.err.println("printer '" + printerName + "' not found, using default");
+                    showAvailablePrinters();
+                }
             }
-            printJob.setPageable(new PDFPageable(document, orientation, showPageBorder, dpi));
-            
+            PDFPageable pageable = new PDFPageable(document, orientation, showPageBorder, dpi);
+            pageable.setRenderingHints(renderingHints);
+            printJob.setPageable(pageable);
+
+            // We're not using PDFPrintable, because then
+            // "the PageFormat for each page is the default page format"
+            // which results in the image appearing in the middle of the page, and padded
+            // when printing on XPS. Also PDFPageable.getPageFormat() won't be called.
+
             if (silentPrint || printJob.printDialog())
             {
                 printJob.print();
@@ -187,9 +203,21 @@ public final class PrintPDF
                 + "  -border                              : Print with border\n"
                 + "  -dpi                                 : Render into intermediate image with\n"
                 + "                                           specific dpi and then print\n"
+                + "  -noColorOpt                          : Disable color optimizations\n"
+                + "                                           (useful when printing barcodes)\n"
                 + "  -silentPrint                         : Print without printer dialog box\n";
-        
         System.err.println(message);
+        showAvailablePrinters();
         System.exit(1);
+    }
+
+    private static void showAvailablePrinters()
+    {
+        System.err.println("Available printer names:");
+        PrintService[] printServices = PrinterJob.lookupPrintServices();
+        for (PrintService printService : printServices)
+        {
+            System.err.println("    " + printService.getName());
+        }
     }
 }

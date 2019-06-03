@@ -102,6 +102,8 @@ public abstract class PDFont implements COSObjectable, PDFontLike
      * Constructor.
      *
      * @param fontDictionary Font dictionary.
+     *
+     * @throws java.io.IOException
      */
     protected PDFont(COSDictionary fontDictionary) throws IOException
     {
@@ -110,46 +112,59 @@ public abstract class PDFont implements COSObjectable, PDFontLike
 
         // standard 14 fonts use an AFM
         afmStandard14 = Standard14Fonts.getAFM(getName()); // may be null (it usually is)
+        fontDescriptor = loadFontDescriptor();
+        toUnicodeCMap = loadUnicodeCmap();
+    }
 
-        // font descriptor
+    private PDFontDescriptor loadFontDescriptor()
+    {
         COSDictionary fd = (COSDictionary) dict.getDictionaryObject(COSName.FONT_DESC);
         if (fd != null)
         {
-            fontDescriptor = new PDFontDescriptor(fd);
+            return new PDFontDescriptor(fd);
         }
         else if (afmStandard14 != null)
         {
             // build font descriptor from the AFM
-            fontDescriptor = PDType1FontEmbedder.buildFontDescriptor(afmStandard14);
+            return PDType1FontEmbedder.buildFontDescriptor(afmStandard14);
         }
         else
         {
-            fontDescriptor = null;
+            return null;
         }
+    }
 
-        // ToUnicode CMap
+    private CMap loadUnicodeCmap()
+    {
         COSBase toUnicode = dict.getDictionaryObject(COSName.TO_UNICODE);
-        if (toUnicode != null)
+        if (toUnicode == null)
         {
-            CMap cmap = null;
-            try
+            return null;
+        }
+        CMap cmap = null;
+        try
+        {
+            cmap = readCMap(toUnicode);
+            if (cmap != null && !cmap.hasUnicodeMappings())
             {
-                cmap = readCMap(toUnicode);
-                if (cmap != null && !cmap.hasUnicodeMappings())
+                LOG.warn("Invalid ToUnicode CMap in font " + getName());
+                String cmapName = cmap.getName() != null ? cmap.getName() : "";
+                String ordering = cmap.getOrdering() != null ? cmap.getOrdering() : "";
+                COSBase encoding = dict.getDictionaryObject(COSName.ENCODING);
+                if ((cmapName.contains("Identity") || (ordering.contains("Identity")))//
+                        && (COSName.IDENTITY_H.equals(encoding)
+                                || COSName.IDENTITY_V.equals(encoding)))
                 {
-                    LOG.warn("Invalid ToUnicode CMap in font " + getName());
+                    // assume that if encoding is identity, then the reverse is also true
+                    cmap = CMapManager.getPredefinedCMap(COSName.IDENTITY_H.getName());
                 }
             }
-            catch (IOException ex)
-            {
-                LOG.error("Could not read ToUnicode CMap in font " + getName(), ex);
-            }
-            toUnicodeCMap = cmap;
         }
-        else
+        catch (IOException ex)
         {
-            toUnicodeCMap = null;
+            LOG.error("Could not read ToUnicode CMap in font " + getName(), ex);
         }
+        return cmap;
     }
 
     /**
@@ -315,6 +330,7 @@ public abstract class PDFont implements COSObjectable, PDFontLike
      * @param text Any Unicode text.
      * @return Array of PDF content stream bytes.
      * @throws IOException If the text could not be encoded.
+     * @throws IllegalArgumentException if a character isn't supported by the font.
      */
     public final byte[] encode(String text) throws IOException
     {
@@ -342,6 +358,7 @@ public abstract class PDFont implements COSObjectable, PDFontLike
      * @param unicode Unicode code point.
      * @return Array of 1 to 4 PDF content stream bytes.
      * @throws IOException If the text could not be encoded.
+     * @throws IllegalArgumentException if a character isn't supported by the font.
      */
     protected abstract byte[] encode(int unicode) throws IOException;
 
@@ -351,6 +368,7 @@ public abstract class PDFont implements COSObjectable, PDFontLike
      * @param text The text to get the width of.
      * @return The width of the string in 1/1000 units of text space.
      * @throws IOException If there is an error getting the width information.
+     * @throws IllegalArgumentException if a character isn't supported by the font.
      */
     public float getStringWidth(String text) throws IOException
     {

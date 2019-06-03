@@ -111,8 +111,8 @@ class LegacyPDFStreamEngine extends PDFStreamEngine
         addOperator(new ShowTextLineAndSpace());
 
         // load additional glyph list for Unicode mapping
-        String path = "org/apache/pdfbox/resources/glyphlist/additional.txt";
-        try (InputStream input = GlyphList.class.getClassLoader().getResourceAsStream(path))
+        String path = "/org/apache/pdfbox/resources/glyphlist/additional.txt";
+        try (InputStream input = GlyphList.class.getResourceAsStream(path))
         {
             glyphList = new GlyphList(GlyphList.getAdobeGlyphList(), input);
         }
@@ -177,9 +177,19 @@ class LegacyPDFStreamEngine extends PDFStreamEngine
         if (fontDescriptor != null)
         {
             float capHeight = fontDescriptor.getCapHeight();
-            if (Float.compare(capHeight, 0) != 0 && (capHeight < glyphHeight || Float.compare(glyphHeight, 0) == 0))
+            if (Float.compare(capHeight, 0) != 0 &&
+                (capHeight < glyphHeight || Float.compare(glyphHeight, 0) == 0))
             {
                 glyphHeight = capHeight;
+            }
+            // PDFBOX-3464, PDFBOX-4480, PDFBOX-4553:
+            // sometimes even CapHeight has very high value, but Ascent and Descent are ok
+            float ascent = fontDescriptor.getAscent();
+            float descent = fontDescriptor.getDescent();
+            if (capHeight > ascent && ascent > 0 && descent < 0 &&
+                ((ascent - descent) / 2 < glyphHeight || Float.compare(glyphHeight, 0) == 0))
+            {
+                glyphHeight = (ascent - descent) / 2;
             }
         }
 

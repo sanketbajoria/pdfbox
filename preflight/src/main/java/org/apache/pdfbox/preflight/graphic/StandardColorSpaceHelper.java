@@ -23,6 +23,7 @@ package org.apache.pdfbox.preflight.graphic;
 
 import java.awt.color.ICC_Profile;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Map;
 
 import org.apache.pdfbox.cos.COSArray;
@@ -80,7 +81,7 @@ public class StandardColorSpaceHelper implements ColorSpaceHelper
     /*
      * (non-Javadoc)
      * 
-     * @see net.awl.edoc.pdfa.validation.graphics.color.ColorSpaceHelper#validate(java .util.List)
+     * @see org.apache.pdfbox.preflight.graphic.color.ColorSpaceHelper#validate(java .util.List)
      */
     @Override
     public final void validate() throws ValidationException
@@ -235,7 +236,12 @@ public class StandardColorSpaceHelper implements ColorSpaceHelper
         PDICCBased iccBased = (PDICCBased) colorSpace;
         try
         {
-            ICC_Profile.getInstance(iccBased.getPDStream().createInputStream());
+            try (InputStream is = iccBased.getPDStream().createInputStream())
+            {
+                // check that ICC profile loads (PDICCBased also does this, but catches the exception)
+                // PDFBOX-2819: load ICC profile as a stream, not as a byte array because of java error
+                ICC_Profile.getInstance(is);
+            }
             PDColorSpace altpdcs = iccBased.getAlternateColorSpace();
             if (altpdcs != null)
             {

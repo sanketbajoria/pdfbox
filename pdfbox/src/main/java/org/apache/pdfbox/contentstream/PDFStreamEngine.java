@@ -501,7 +501,20 @@ public abstract class PDFStreamEngine
         	partialTokens.add(token);
             if (token instanceof COSObject)
             {
-                arguments.add(((COSObject) token).getObject());
+                if (token instanceof COSObject)
+                {
+                    arguments.add(((COSObject) token).getObject());
+                }
+                else if (token instanceof Operator)
+                {
+                    processOperator((Operator) token, arguments);
+                    arguments = new ArrayList<>();
+                }
+                else
+                {
+                    arguments.add((COSBase) token);
+                }
+                token = parser.parseNextToken();
             }
             else if (token instanceof Operator)
             {
@@ -877,6 +890,25 @@ public abstract class PDFStreamEngine
         {
             processType3Stream(charProc, textRenderingMatrix);
         }
+    }
+
+    /**
+     * Called when a marked content group begins
+     *
+     * @param tag indicates the role or significance of the sequence
+     * @param properties optional properties
+     */
+    public void beginMarkedContentSequence(COSName tag, COSDictionary properties)
+    {
+        // overridden in subclasses
+    }
+
+    /**
+     * Called when a a marked content group ends
+     */
+    public void endMarkedContentSequence()
+    {
+        // overridden in subclasses
     }
 
     /**

@@ -67,7 +67,7 @@ public class PDFreeTextAppearanceHandler extends PDAbstractAppearanceHandler
     {
         PDAnnotationFreeText annotation = (PDAnnotationFreeText) getAnnotation();
         float[] pathsArray = new float[0];
-        if ("FreeTextCallout".equals(annotation.getIntent()))
+        if (PDAnnotationFreeText.IT_FREE_TEXT_CALLOUT.equals(annotation.getIntent()))
         {
             pathsArray = annotation.getCallout();
             if (pathsArray == null || pathsArray.length != 4 && pathsArray.length != 6)
@@ -128,7 +128,7 @@ public class PDFreeTextAppearanceHandler extends PDAbstractAppearanceHandler
             }
 
             // paint the styles here and after line(s) draw, to avoid line crossing a filled shape       
-            if ("FreeTextCallout".equals(annotation.getIntent())
+            if (PDAnnotationFreeText.IT_FREE_TEXT_CALLOUT.equals(annotation.getIntent())
                     // check only needed to avoid q cm Q if LE_NONE
                     && !LE_NONE.equals(annotation.getLineEndingStyle())
                     && pathsArray.length >= 4)
@@ -292,6 +292,8 @@ public class PDFreeTextAppearanceHandler extends PDAbstractAppearanceHandler
                 
                 // need to set the BBox too, because rectangle modification came later
                 annotation.getNormalAppearanceStream().setBBox(getRectangle());
+                
+                //TODO when callout is used, /RD should be so that the result is the writable part
             }
         }
         catch (IOException ex)

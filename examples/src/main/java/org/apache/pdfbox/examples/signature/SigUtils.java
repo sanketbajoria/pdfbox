@@ -16,12 +16,21 @@
 
 package org.apache.pdfbox.examples.signature;
 
+import java.io.IOException;
+import java.security.cert.CertificateParsingException;
+import java.security.cert.X509Certificate;
+import java.util.List;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSBase;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.interactive.digitalsignature.PDSignature;
+import org.bouncycastle.asn1.x509.KeyPurposeId;
 
 /**
  * Utility class for the signature / timestamp examples.
@@ -30,6 +39,8 @@ import org.apache.pdfbox.pdmodel.interactive.digitalsignature.PDSignature;
  */
 public class SigUtils
 {
+    private static final Log LOG = LogFactory.getLog(SigUtils.class);
+
     private SigUtils()
     {
     }
@@ -125,5 +136,104 @@ public class SigUtils
         permsDict.setItem(COSName.DOCMDP, signature);
         catalogDict.setNeedToBeUpdated(true);
         permsDict.setNeedToBeUpdated(true);
+    }
+
+    /**
+     * Log if the certificate is not valid for signature usage. Doing this
+     * anyway results in Adobe Reader failing to validate the PDF.
+     *
+     * @param x509Certificate 
+     * @throws java.security.cert.CertificateParsingException 
+     */
+    public static void checkCertificateUsage(X509Certificate x509Certificate)
+            throws CertificateParsingException
+    {
+        // Check whether signer certificate is "valid for usage"
+        // https://stackoverflow.com/a/52765021/535646
+        // https://www.adobe.com/devnet-docs/acrobatetk/tools/DigSig/changes.html#id1
+        boolean[] keyUsage = x509Certificate.getKeyUsage();
+        if (keyUsage != null && !keyUsage[0] && !keyUsage[1])
+        {
+            // (unclear what "signTransaction" is)
+            // https://tools.ietf.org/html/rfc5280#section-4.2.1.3
+            LOG.error("Certificate key usage does not include " +
+                    "digitalSignature nor nonRepudiation");
+        }
+        List<String> extendedKeyUsage = x509Certificate.getExtendedKeyUsage();
+        if (extendedKeyUsage != null &&
+            !extendedKeyUsage.contains(KeyPurposeId.id_kp_emailProtection.toString()) &&
+            !extendedKeyUsage.contains(KeyPurposeId.id_kp_codeSigning.toString()) &&
+            !extendedKeyUsage.contains(KeyPurposeId.anyExtendedKeyUsage.toString()) &&
+            !extendedKeyUsage.contains("1.2.840.113583.1.1.5") &&
+            // not mentioned in Adobe document, but tolerated in practice
+            !extendedKeyUsage.contains("1.3.6.1.4.1.311.10.3.12"))
+        {
+            LOG.error("Certificate extended key usage does not include " +
+                    "emailProtection, nor codeSigning, nor anyExtendedKeyUsage, " +
+                    "nor 'Adobe Authentic Documents Trust'");
+        }
+    }
+
+    /**
+     * Log if the certificate is not valid for timestamping.
+     *
+     * @param x509Certificate 
+     * @throws java.security.cert.CertificateParsingException 
+     */
+    public static void checkTimeStampCertificateUsage(X509Certificate x509Certificate)
+            throws CertificateParsingException
+    {
+        List<String> extendedKeyUsage = x509Certificate.getExtendedKeyUsage();
+        // https://tools.ietf.org/html/rfc5280#section-4.2.1.12
+        if (extendedKeyUsage != null &&
+            !extendedKeyUsage.contains(KeyPurposeId.id_kp_timeStamping.toString()))
+        {
+            LOG.error("Certificate extended key usage does not include timeStamping");
+        }
+    }
+
+    /**
+     * Log if the certificate is not valid for responding.
+     *
+     * @param x509Certificate 
+     * @throws java.security.cert.CertificateParsingException 
+     */
+    public static void checkResponderCertificateUsage(X509Certificate x509Certificate)
+            throws CertificateParsingException
+    {
+        List<String> extendedKeyUsage = x509Certificate.getExtendedKeyUsage();
+        // https://tools.ietf.org/html/rfc5280#section-4.2.1.12
+        if (extendedKeyUsage != null &&
+            !extendedKeyUsage.contains(KeyPurposeId.id_kp_OCSPSigning.toString()))
+        {
+            LOG.error("Certificate extended key usage does not include OCSP responding");
+        }
+    }
+
+    /**
+     * Gets the last relevant signature in the document, i.e. the one with the highest offset.
+     * 
+     * @param document to get its last signature
+     * @return last signature or null when none found
+     * @throws IOException
+     */
+    public static PDSignature getLastRelevantSignature(PDDocument document) throws IOException
+    {
+        SortedMap<Integer, PDSignature> sortedMap = new TreeMap<>();
+        for (PDSignature signature : document.getSignatureDictionaries())
+        {
+            int sigOffset = signature.getByteRange()[1];
+            sortedMap.put(sigOffset, signature);
+        }
+        if (sortedMap.size() > 0)
+        {
+            PDSignature lastSignature = sortedMap.get(sortedMap.lastKey());
+            COSBase type = lastSignature.getCOSObject().getItem(COSName.TYPE);
+            if (type.equals(COSName.SIG) || type.equals(COSName.DOC_TIME_STAMP))
+            {
+                return lastSignature;
+            }
+        }
+        return null;
     }
 }

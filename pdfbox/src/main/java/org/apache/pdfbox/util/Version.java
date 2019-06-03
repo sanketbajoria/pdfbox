@@ -18,7 +18,7 @@
 package org.apache.pdfbox.util;
 
 import java.io.IOException;
-import java.net.URL;
+import java.io.InputStream;
 import java.util.Properties;
 
 import org.apache.commons.logging.Log;
@@ -32,7 +32,7 @@ public final class Version
     private static final Log LOG = LogFactory.getLog(Version.class);
 
     private static final String PDFBOX_VERSION_PROPERTIES =
-            "org/apache/pdfbox/resources/version.properties";
+            "/org/apache/pdfbox/resources/version.properties";
 
     private Version()
     {
@@ -44,15 +44,14 @@ public final class Version
      */
     public static String getVersion()
     {
-        try
+        try (InputStream is = Version.class.getResourceAsStream(PDFBOX_VERSION_PROPERTIES))
         {
-            URL url = Version.class.getClassLoader().getResource(PDFBOX_VERSION_PROPERTIES);
-            if (url == null)
+            if (is == null)
             {
                 return null;
             }
             Properties properties = new Properties();
-            properties.load(url.openStream());
+            properties.load(is);
             return properties.getProperty("pdfbox.version", null);
         }
         catch (IOException io)

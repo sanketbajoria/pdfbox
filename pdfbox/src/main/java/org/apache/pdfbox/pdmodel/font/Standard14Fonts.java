@@ -19,7 +19,6 @@ package org.apache.pdfbox.pdmodel.font;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -113,20 +112,16 @@ final class Standard14Fonts
             STANDARD14_AFM_MAP.put(fontName, STANDARD14_AFM_MAP.get(afmName));
         }
 
-        String resourceName = "org/apache/pdfbox/resources/afm/" + afmName + ".afm";
-        URL url = PDType1Font.class.getClassLoader().getResource(resourceName);
-        if (url != null)
+        String resourceName = "/org/apache/pdfbox/resources/afm/" + afmName + ".afm";
+        try (InputStream afmStream = PDType1Font.class.getResourceAsStream(resourceName))
         {
-            try (InputStream afmStream = url.openStream())
+            if (afmStream == null)
             {
-                AFMParser parser = new AFMParser(afmStream);
-                FontMetrics metric = parser.parse(true);
-                STANDARD14_AFM_MAP.put(fontName, metric);
+                throw new IOException(resourceName + " not found");
             }
-        }
-        else
-        {
-            throw new IOException(resourceName + " not found");
+            AFMParser parser = new AFMParser(afmStream);
+            FontMetrics metric = parser.parse(true);
+            STANDARD14_AFM_MAP.put(fontName, metric);
         }
     }
 

@@ -25,6 +25,7 @@ import org.apache.pdfbox.cos.COSBoolean;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.cos.COSString;
+import org.apache.pdfbox.pdmodel.common.COSObjectable;
 
 /**
  * This class is a specialized view of the encryption dictionary of a PDF document.
@@ -37,7 +38,7 @@ import org.apache.pdfbox.cos.COSString;
  * @author Ben Litchfield
  * @author Benoit Guillon
  */
-public class PDEncryption
+public class PDEncryption implements COSObjectable
 {
     /**
      * See PDF Reference 1.4 Table 3.13.
@@ -134,7 +135,8 @@ public class PDEncryption
      *
      * @return The COS dictionary that this object wraps.
      */
-    public COSDictionary getCOSDictionary()
+    @Override
+    public COSDictionary getCOSObject()
     {
         return dictionary;
     }
@@ -424,6 +426,7 @@ public class PDEncryption
             array.add(recip);
         }
         dictionary.setItem(COSName.RECIPIENTS, array);
+        array.setDirect(true);
     }
 
     /**
@@ -461,21 +464,32 @@ public class PDEncryption
     }
 
     /**
+     * Returns the default crypt filter (for public-key security handler).
+     * 
+     * @return the default crypt filter if available.
+     */
+    public PDCryptFilterDictionary getDefaultCryptFilterDictionary() 
+    {
+        return getCryptFilterDictionary(COSName.DEFAULT_CRYPT_FILTER);
+    }
+
+    /**
      * Returns the crypt filter with the given name.
      * 
      * @param cryptFilterName the name of the crypt filter
      * 
      * @return the crypt filter with the given name if available
      */
-    public PDCryptFilterDictionary getCryptFilterDictionary(COSName cryptFilterName) 
+    public PDCryptFilterDictionary getCryptFilterDictionary(COSName cryptFilterName)
     {
-        COSDictionary cryptFilterDictionary = (COSDictionary) dictionary.getDictionaryObject( COSName.CF );
-        if (cryptFilterDictionary != null)
+        // See CF in "Table 20 – Entries common to all encryption dictionaries"
+        COSBase base = dictionary.getDictionaryObject(COSName.CF);
+        if (base instanceof COSDictionary)
         {
-            COSDictionary stdCryptFilterDictionary = (COSDictionary)cryptFilterDictionary.getDictionaryObject(cryptFilterName);
-            if (stdCryptFilterDictionary != null)
+            COSBase base2 = ((COSDictionary) base).getDictionaryObject(cryptFilterName);
+            if (base2 instanceof COSDictionary)
             {
-                return new PDCryptFilterDictionary(stdCryptFilterDictionary);
+                return new PDCryptFilterDictionary((COSDictionary) base2);
             }
         }
         return null;
@@ -489,14 +503,14 @@ public class PDEncryption
      */
     public void setCryptFilterDictionary(COSName cryptFilterName, PDCryptFilterDictionary cryptFilterDictionary)
     {
-        COSDictionary cfDictionary = (COSDictionary)dictionary.getDictionaryObject( COSName.CF );
+        COSDictionary cfDictionary = dictionary.getCOSDictionary(COSName.CF);
         if (cfDictionary == null)
         {
             cfDictionary = new COSDictionary();
             dictionary.setItem(COSName.CF, cfDictionary);
         }
-        
-        cfDictionary.setItem(cryptFilterName, cryptFilterDictionary.getCOSDictionary());
+        cfDictionary.setDirect(true); // PDFBOX-4436 direct obj needed for Adobe Reader on Android
+        cfDictionary.setItem(cryptFilterName, cryptFilterDictionary.getCOSObject());
     }
     
     /**
@@ -506,9 +520,21 @@ public class PDEncryption
      */
     public void setStdCryptFilterDictionary(PDCryptFilterDictionary cryptFilterDictionary)
     {
+        cryptFilterDictionary.getCOSObject().setDirect(true); // PDFBOX-4436
         setCryptFilterDictionary(COSName.STD_CF, cryptFilterDictionary);
     }
-    
+
+    /**
+     * Sets the default crypt filter (for public-key security handler).
+     *
+     * @param defaultFilterDictionary the standard crypt filter to set
+     */
+    public void setDefaultCryptFilterDictionary(PDCryptFilterDictionary defaultFilterDictionary)
+    {
+        defaultFilterDictionary.getCOSObject().setDirect(true); // PDFBOX-4436
+        setCryptFilterDictionary(COSName.DEFAULT_CRYPT_FILTER, defaultFilterDictionary);
+    }
+
     /**
      * Returns the name of the filter which is used for de/encrypting streams.
      * Default value is "Identity".

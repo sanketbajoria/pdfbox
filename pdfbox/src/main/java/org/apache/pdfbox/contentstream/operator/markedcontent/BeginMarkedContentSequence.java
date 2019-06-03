@@ -21,8 +21,8 @@ import java.util.List;
 
 import org.apache.pdfbox.cos.COSBase;
 import org.apache.pdfbox.cos.COSName;
-import org.apache.pdfbox.text.PDFMarkedContentExtractor;
 import org.apache.pdfbox.contentstream.operator.Operator;
+import org.apache.pdfbox.contentstream.operator.OperatorName;
 import org.apache.pdfbox.contentstream.operator.OperatorProcessor;
 
 /**
@@ -43,15 +43,12 @@ public class BeginMarkedContentSequence extends OperatorProcessor
                 tag = (COSName) argument;
             }
         }
-        if (this.context instanceof PDFMarkedContentExtractor)
-        {
-            ((PDFMarkedContentExtractor) this.context).beginMarkedContentSequence(tag, null);
-        }
+        context.beginMarkedContentSequence(tag, null);
     }
 
     @Override
     public String getName()
     {
-        return "BMC";
+        return OperatorName.BEGIN_MARKED_CONTENT;
     }
 }

@@ -43,6 +43,7 @@ import org.apache.pdfbox.cos.COSDocument;
 import org.apache.pdfbox.cos.COSInteger;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.cos.COSObject;
+import org.apache.pdfbox.cos.COSUpdateInfo;
 import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.io.MemoryUsageSetting;
 import org.apache.pdfbox.io.RandomAccessBuffer;
@@ -95,7 +96,7 @@ public class PDDocument implements Closeable
     private static final Log LOG = LogFactory.getLog(PDDocument.class);
 
     /**
-     * avoid concurrency issues with PDDeviceRGB and deadlock in COSNumber/COSInteger
+     * avoid concurrency issues with PDDeviceRGB
      */
     static
     {
@@ -147,7 +148,10 @@ public class PDDocument implements Closeable
 
     // document-wide cached resources
     private ResourceCache resourceCache = new DefaultResourceCache();
-    
+
+    // to make sure only one signature is added
+    private boolean signatureAdded = false;
+
     /**
      * Creates an empty PDF document.
      * You need to add at least one page for the document to be valid.
@@ -215,9 +219,14 @@ public class PDDocument implements Closeable
      * Add parameters of signature to be created externally using default signature options. See
      * {@link #saveIncrementalForExternalSigning(OutputStream)} method description on external
      * signature creation scenario details.
+     * <p>
+     * Only one signature may be added in a document. To sign several times,
+     * load document, add signature, save incremental and close again.
      *
      * @param sigObject is the PDSignatureField model
      * @throws IOException if there is an error creating required fields
+     * @throws IllegalStateException if one attempts to add several signature
+     * fields.
      */
     public void addSignature(PDSignature sigObject) throws IOException
     {
@@ -228,10 +237,15 @@ public class PDDocument implements Closeable
      * Add parameters of signature to be created externally. See
      * {@link #saveIncrementalForExternalSigning(OutputStream)} method description on external
      * signature creation scenario details.
+     * <p>
+     * Only one signature may be added in a document. To sign several times,
+     * load document, add signature, save incremental and close again.
      *
      * @param sigObject is the PDSignatureField model
      * @param options signature options
      * @throws IOException if there is an error creating required fields
+     * @throws IllegalStateException if one attempts to add several signature
+     * fields.
      */
     public void addSignature(PDSignature sigObject, SignatureOptions options) throws IOException
     {
@@ -240,10 +254,16 @@ public class PDDocument implements Closeable
 
     /**
      * Add a signature to be created using the instance of given interface.
+     * <p>
+     * Only one signature may be added in a document. To sign several times,
+     * load document, add signature, save incremental and close again.
      * 
      * @param sigObject is the PDSignatureField model
-     * @param signatureInterface is an interface which provides signing capabilities
+     * @param signatureInterface is an interface whose implementation provides
+     * signing capabilities. Can be null if external signing if used.
      * @throws IOException if there is an error creating required fields
+     * @throws IllegalStateException if one attempts to add several signature
+     * fields.
      */
     public void addSignature(PDSignature sigObject, SignatureInterface signatureInterface) throws IOException
     {
@@ -254,15 +274,27 @@ public class PDDocument implements Closeable
      * This will add a signature to the document. If the 0-based page number in the options
      * parameter is smaller than 0 or larger than max, the nearest valid page number will be used
      * (i.e. 0 or max) and no exception will be thrown.
+     * <p>
+     * Only one signature may be added in a document. To sign several times,
+     * load document, add signature, save incremental and close again.
      *
      * @param sigObject is the PDSignatureField model
-     * @param signatureInterface is an interface which provides signing capabilities
+     * @param signatureInterface is an interface whose implementation provides
+     * signing capabilities. Can be null if external signing if used.
      * @param options signature options
      * @throws IOException if there is an error creating required fields
+     * @throws IllegalStateException if one attempts to add several signature
+     * fields.
      */
     public void addSignature(PDSignature sigObject, SignatureInterface signatureInterface,
                              SignatureOptions options) throws IOException
     {
+        if (signatureAdded)
+        {
+            throw new IllegalStateException("Only one signature may be added in a document");
+        }
+        signatureAdded = true;
+
         // Reserve content
         // We need to reserve some space for the signature. Some signatures including
         // big certificate chain and we need enough space to store it.
@@ -566,65 +598,6 @@ public class PDDocument implements Closeable
     }
 
     /**
-     * This will add a list of signature fields to the document.
-     * 
-     * @param sigFields are the PDSignatureFields that should be added to the document
-     * @param signatureInterface is a interface which provides signing capabilities
-     * @param options signature options
-     * @throws IOException if there is an error creating required fields
-     */
-    public void addSignatureField(List<PDSignatureField> sigFields, SignatureInterface signatureInterface,
-            SignatureOptions options) throws IOException
-    {
-        PDDocumentCatalog catalog = getDocumentCatalog();
-        catalog.getCOSObject().setNeedToBeUpdated(true);
-
-        PDAcroForm acroForm = catalog.getAcroForm();
-        if (acroForm == null)
-        {
-            acroForm = new PDAcroForm(this);
-            catalog.setAcroForm(acroForm);
-        }
-        COSDictionary acroFormDict = acroForm.getCOSObject();
-        acroFormDict.setDirect(true);
-        acroFormDict.setNeedToBeUpdated(true);
-        if (!acroForm.isSignaturesExist())
-        {
-            // 1 if at least one signature field is available
-            acroForm.setSignaturesExist(true); 
-        }
-
-        List<PDField> acroformFields = acroForm.getFields();
-
-        for (PDSignatureField sigField : sigFields)
-        {
-            sigField.getCOSObject().setNeedToBeUpdated(true);
-            
-            // Check if the field already exists
-            boolean checkSignatureField = checkSignatureField(acroForm.getFieldIterator(), sigField);
-            if (checkSignatureField)
-            {
-                sigField.getCOSObject().setNeedToBeUpdated(true);
-            }
-            else
-            {
-                acroformFields.add(sigField);
-            }
-
-            // Check if we need to add a signature
-            if (sigField.getSignature() != null)
-            {
-                sigField.getCOSObject().setNeedToBeUpdated(true);
-                if (options == null)
-                {
-                    // TODO ??
-                }
-                addSignature(sigField.getSignature(), signatureInterface, options);
-            }
-        }
-    }
-
-    /**
      * Remove the page from the document.
      * 
      * @param page The page to remove from the document.
@@ -645,23 +618,28 @@ public class PDDocument implements Closeable
     }
 
     /**
-     * This will import and copy the contents from another location. Currently the content stream is stored in a scratch
-     * file. The scratch file is associated with the document. If you are adding a page to this document from another
-     * document and want to copy the contents to this
-     * document's scratch file then use this method otherwise just use the {@link #addPage addPage}
+     * This will import and copy the contents from another location. Currently the content stream is
+     * stored in a scratch file. The scratch file is associated with the document. If you are adding
+     * a page to this document from another document and want to copy the contents to this
+     * document's scratch file then use this method otherwise just use the {@link #addPage addPage()}
      * method.
      * <p>
-     * Unlike {@link #addPage addPage}, this method creates a new PDPage object. If your page has
+     * Unlike {@link #addPage addPage()}, this method creates a new PDPage object. If your page has
      * annotations, and if these link to pages not in the target document, then the target document
      * might become huge. What you need to do is to delete page references of such annotations. See
      * <a href="http://stackoverflow.com/a/35477351/535646">here</a> for how to do this.
      * <p>
-     * Inherited (global) resources are ignored. If you need them, call
-     * <code>importedPage.setRotation(page.getRotation());</code>
+     * Inherited (global) resources are ignored because these can contain resources not needed for
+     * this page which could bloat your document, see
+     * <a href="https://issues.apache.org/jira/browse/PDFBOX-28">PDFBOX-28</a> and related issues.
+     * If you need them, call <code>importedPage.setResources(page.getResources());</code>
+     * <p>
+     * This method should only be used to import a page from a loaded document, not from a generated
+     * document because these can contain unfinished parts, e.g. font subsetting information.
      *
      * @param page The page to import.
      * @return The page that was imported.
-     * 
+     *
      * @throws IOException If there is an error copying the page.
      */
     public PDPage importPage(PDPage page) throws IOException
@@ -728,16 +706,17 @@ public class PDDocument implements Closeable
     }
 
     /**
-     * This will get the document info dictionary. This is guaranteed to not return null.
-     * 
-     * @return The documents /Info dictionary
+     * This will get the document info dictionary. If it doesn't exist, an empty document info
+     * dictionary is created in the document trailer.
+     *
+     * @return The documents /Info dictionary, never null.
      */
     public PDDocumentInformation getDocumentInformation()
     {
         if (documentInformation == null)
         {
             COSDictionary trailer = document.getTrailer();
-            COSDictionary infoDic = (COSDictionary) trailer.getDictionaryObject(COSName.INFO);
+            COSDictionary infoDic = trailer.getCOSDictionary(COSName.INFO);
             if (infoDic == null)
             {
                 infoDic = new COSDictionary();
@@ -1022,10 +1001,10 @@ public class PDDocument implements Closeable
     }
 
     /**
-     * Parses a PDF. The given input stream is copied to the memory to enable random access to the pdf.
-     * Unrestricted main memory will be used for buffering PDF streams.
+     * Parses a PDF. The given input stream is copied to the memory to enable random access to the
+     * pdf. Unrestricted main memory will be used for buffering PDF streams.
      * 
-     * @param input stream that contains the document.
+     * @param input stream that contains the document. Don't forget to close it after loading.
      * 
      * @return loaded document
      * 
@@ -1038,12 +1017,11 @@ public class PDDocument implements Closeable
     }
 
     /**
-     * Parses a PDF. Depending on the memory settings parameter the given input
-     * stream is either copied to main memory or to a temporary file to enable
-     * random access to the pdf.
+     * Parses a PDF. Depending on the memory settings parameter the given input stream is either
+     * copied to main memory or to a temporary file to enable random access to the pdf.
      * 
-     * @param input stream that contains the document.
-     * @param memUsageSetting defines how memory is used for buffering input stream and PDF streams 
+     * @param input stream that contains the document. Don't forget to close it after loading.
+     * @param memUsageSetting defines how memory is used for buffering input stream and PDF streams
      * 
      * @return loaded document
      * 
@@ -1057,12 +1035,12 @@ public class PDDocument implements Closeable
     }
 
     /**
-     * Parses a PDF. The given input stream is copied to the memory to enable random access to the pdf.
-     * Unrestricted main memory will be used for buffering PDF streams.
-     * 
-     * @param input stream that contains the document.
+     * Parses a PDF. The given input stream is copied to the memory to enable random access to the
+     * pdf. Unrestricted main memory will be used for buffering PDF streams.
+     *
+     * @param input stream that contains the document. Don't forget to close it after loading.
      * @param password password to be used for decryption
-     * 
+     *
      * @return loaded document
      * 
      * @throws InvalidPasswordException If the password is incorrect.
@@ -1075,10 +1053,10 @@ public class PDDocument implements Closeable
     }
 
     /**
-     * Parses a PDF. The given input stream is copied to the memory to enable random access to the pdf.
-     * Unrestricted main memory will be used for buffering PDF streams.
-     * 
-     * @param input stream that contains the document.
+     * Parses a PDF. The given input stream is copied to the memory to enable random access to the
+     * pdf. Unrestricted main memory will be used for buffering PDF streams.
+     *
+     * @param input stream that contains the document. Don't forget to close it after loading.
      * @param password password to be used for decryption
      * @param keyStore key store to be used for decryption when using public key security 
      * @param alias alias to be used for decryption when using public key security
@@ -1094,11 +1072,10 @@ public class PDDocument implements Closeable
     }
 
     /**
-     * Parses a PDF. Depending on the memory settings parameter the given input
-     * stream is either copied to main memory or to a temporary file to enable
-     * random access to the pdf.
-     * 
-     * @param input stream that contains the document.
+     * Parses a PDF. Depending on the memory settings parameter the given input stream is either
+     * copied to main memory or to a temporary file to enable random access to the pdf.
+     *
+     * @param input stream that contains the document. Don't forget to close it after loading.
      * @param password password to be used for decryption
      * @param memUsageSetting defines how memory is used for buffering input stream and PDF streams 
      * 
@@ -1114,11 +1091,10 @@ public class PDDocument implements Closeable
     }
     
     /**
-     * Parses a PDF. Depending on the memory settings parameter the given input
-     * stream is either copied to memory or to a temporary file to enable
-     * random access to the pdf.
-     * 
-     * @param input stream that contains the document.
+     * Parses a PDF. Depending on the memory settings parameter the given input stream is either
+     * copied to memory or to a temporary file to enable random access to the pdf.
+     *
+     * @param input stream that contains the document. Don't forget to close it after loading.
      * @param password password to be used for decryption
      * @param keyStore key store to be used for decryption when using public key security 
      * @param alias alias to be used for decryption when using public key security
@@ -1277,10 +1253,17 @@ public class PDDocument implements Closeable
 
     /**
      * Save the PDF as an incremental update. This is only possible if the PDF was loaded from a
-     * file or a stream, not if the document was created in PDFBox itself.
+     * file or a stream, not if the document was created in PDFBox itself. There must be a path of
+     * objects that have {@link COSUpdateInfo#isNeedToBeUpdated()} set, starting from the document
+     * catalog. For signatures this is taken care by PDFBox itself.
+     *<p>
+     * Other usages of this method are for experienced users only. You will usually never need it.
+     * It is useful only if you are required to keep the current revision and append the changes. A
+     * typical use case is changing a signed file without invalidating the signature.
      *
-     * @param output stream to write to. It will be closed when done. It should <i><b>not</b></i>
-     * point to the source file.
+     * @param output stream to write to. It will be closed when done. It
+     * <i><b>must never</b></i> point to the source file or that one will be
+     * harmed!
      * @throws IOException if the output could not be written
      * @throws IllegalStateException if the document was not loaded from a file or a stream.
      */
@@ -1324,8 +1307,9 @@ public class PDDocument implements Closeable
      * {@code PDDocument} instance and only AFTER {@link ExternalSigningSupport} instance is used.
      * </p>
      *
-     * @param output stream to write the final PDF. It should <i><b>not</b></i> point to the source
-     * file. It will be closed when the document is closed.
+     * @param output stream to write the final PDF. It will be closed when the
+     * document is closed. It <i><b>must never</b></i> point to the source file
+     * or that one will be harmed!
      * @return instance to be used for external signing and setting CMS signature
      * @throws IOException if the output could not be written
      * @throws IllegalStateException if the document was not loaded from a file or a stream or

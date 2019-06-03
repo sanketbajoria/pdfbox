@@ -21,7 +21,6 @@ import java.util.Hashtable;
 import java.util.Map;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.pdfbox.cos.COSArray;
 import org.apache.pdfbox.cos.COSBase;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSName;
@@ -64,31 +63,6 @@ public class PDStructureTreeRoot extends PDStructureNode
     public PDStructureTreeRoot(COSDictionary dic)
     {
         super(dic);
-    }
-
-    /**
-     * Returns the K array entry.
-     * 
-     * @return the K array entry
-     */
-    public COSArray getKArray()
-    {
-        COSBase k = this.getCOSObject().getDictionaryObject(COSName.K);
-        if (k instanceof COSDictionary)
-        {
-            COSDictionary kdict = (COSDictionary) k;
-            k = kdict.getDictionaryObject(COSName.K);
-            if (k instanceof COSArray)
-            {
-                return (COSArray) k;
-            }
-        }
-        else if (k instanceof COSArray)
-        {
-            return (COSArray) k;
-        }
-
-        return null;
     }
 
     /**
@@ -147,7 +121,7 @@ public class PDStructureTreeRoot extends PDStructureNode
         COSBase base = getCOSObject().getDictionaryObject(COSName.PARENT_TREE);
         if (base instanceof COSDictionary)
         {
-            return new PDNumberTreeNode((COSDictionary) base, COSBase.class);
+            return new PDNumberTreeNode((COSDictionary) base, PDParentTreeValue.class);
         }
         return null;
     }

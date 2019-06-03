@@ -21,7 +21,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PushbackInputStream;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -357,54 +356,57 @@ public class CMapParser
             }
             byte[] startCode = (byte[]) nextToken;
             byte[] endCode = (byte[]) parseNextToken(cmapStream);
+            int start = CMap.toInt(startCode, startCode.length);
+            int end = CMap.toInt(endCode, endCode.length);
+            // end has to be bigger than start or equal
+            // the range can not represent more that 255 values
+            if (end < start || (end - start) > 255)
+            {
+                // PDFBOX-4550: likely corrupt stream
+                break;
+            }
             nextToken = parseNextToken(cmapStream);
-            List<byte[]> array = null;
-            byte[] tokenBytes;
             if (nextToken instanceof List<?>)
             {
-                array = (List<byte[]>) nextToken;
-                if (array.isEmpty())
+                List<byte[]> array = (List<byte[]>) nextToken;
+                // ignore empty and malformed arrays
+                if (!array.isEmpty() && array.size() >= end - start)
                 {
-                    continue;
+                    addMappingFrombfrange(result, startCode, array);
                 }
-                tokenBytes = array.get(0);
             }
-            else
+            // PDFBOX-3807: ignore null
+            else if (nextToken instanceof byte[])
             {
-                tokenBytes = (byte[]) nextToken;
-            }
-            if (tokenBytes == null || tokenBytes.length == 0)
-            {
+                byte[] tokenBytes = (byte[]) nextToken;
                 // PDFBOX-3450: ignore <>
-                // PDFBOX-3807: ignore null
-                continue;
-            }
-            boolean done = false;
-
-            int arrayIndex = 0;
-            while (!done)
-            {
-                if (compare(startCode, endCode) >= 0)
+                if (tokenBytes.length > 0)
                 {
-                    done = true;
-                }
-                String value = createStringFromBytes(tokenBytes);
-                result.addCharMapping(startCode, value);
-                increment(startCode);
-
-                if (array == null)
-                {
-                    increment(tokenBytes);
-                }
-                else
-                {
-                    arrayIndex++;
-                    if (arrayIndex < array.size())
-                    {
-                        tokenBytes = array.get(arrayIndex);
-                    }
+                    addMappingFrombfrange(result, startCode, end - start + 1, tokenBytes);
                 }
             }
+        }
+    }
+
+    private void addMappingFrombfrange(CMap cmap, byte[] startCode, List<byte[]> tokenBytesList)
+    {
+        for (byte[] tokenBytes : tokenBytesList)
+        {
+            String value = createStringFromBytes(tokenBytes);
+            cmap.addCharMapping(startCode, value);
+            increment(startCode);
+        }
+    }
+
+    private void addMappingFrombfrange(CMap cmap, byte[] startCode, int values,
+            byte[] tokenBytes)
+    {
+        for (int i = 0; i < values; i++)
+        {
+            String value = createStringFromBytes(tokenBytes);
+            cmap.addCharMapping(startCode, value);
+            increment(startCode);
+            increment(tokenBytes);
         }
     }
 
@@ -417,12 +419,12 @@ public class CMapParser
      */
     protected InputStream getExternalCMap(String name) throws IOException
     {
-        URL url = getClass().getResource(name);
-        if (url == null)
+        InputStream is = getClass().getResourceAsStream(name);
+        if (is == null)
         {
             throw new IOException("Error: Could not find referenced cmap stream " + name);
         }
-        return url.openStream();
+        return is;
     }
 
     private Object parseNextToken(PushbackInputStream is) throws IOException
@@ -704,30 +706,9 @@ public class CMapParser
         return intValue;
     }
 
-    private String createStringFromBytes(byte[] bytes) throws IOException
+    private String createStringFromBytes(byte[] bytes)
     {
         return new String(bytes, bytes.length == 1 ? Charsets.ISO_8859_1 : Charsets.UTF_16BE);
-    }
-
-    private int compare(byte[] first, byte[] second)
-    {
-        for (int i = 0; i < first.length; i++)
-        {
-            if (first[i] == second[i])
-            {
-                continue;
-            }
-
-            if ((first[i] & 0xFF) < (second[i] & 0xFF))
-            {
-                return -1;
-            }
-            else
-            {
-                return 1;
-            }
-        }
-        return 0;
     }
 
     /**

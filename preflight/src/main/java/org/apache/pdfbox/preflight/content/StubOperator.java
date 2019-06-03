@@ -35,6 +35,7 @@ import static org.apache.pdfbox.preflight.PreflightConstants.MAX_POSITIVE_FLOAT;
 import static org.apache.pdfbox.preflight.PreflightConstants.MAX_STRING_LENGTH;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.pdfbox.cos.COSArray;
@@ -45,6 +46,7 @@ import org.apache.pdfbox.cos.COSInteger;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.cos.COSString;
 import org.apache.pdfbox.contentstream.operator.Operator;
+import org.apache.pdfbox.contentstream.operator.OperatorName;
 import org.apache.pdfbox.contentstream.operator.OperatorProcessor;
 
 /**
@@ -54,6 +56,39 @@ import org.apache.pdfbox.contentstream.operator.OperatorProcessor;
 public class StubOperator extends OperatorProcessor
 {
     private final String name;
+
+    private static final List<String> CHECK_NO_OPERANDS = Arrays.asList( //
+            OperatorName.STROKE_PATH, OperatorName.FILL_NON_ZERO, OperatorName.LEGACY_FILL_NON_ZERO,
+            OperatorName.FILL_EVEN_ODD, OperatorName.FILL_NON_ZERO_AND_STROKE,
+            OperatorName.FILL_EVEN_ODD_AND_STROKE, OperatorName.CLOSE_FILL_NON_ZERO_AND_STROKE,
+            OperatorName.CLOSE_FILL_EVEN_ODD_AND_STROKE, OperatorName.CLOSE_AND_STROKE,
+            OperatorName.END_MARKED_CONTENT, OperatorName.CLOSE_PATH, OperatorName.CLIP_NON_ZERO,
+            OperatorName.CLIP_EVEN_ODD, OperatorName.ENDPATH);
+
+    private static final List<String> CHECK_STRING_OPERANDS = Arrays.asList( //
+            OperatorName.BEGIN_MARKED_CONTENT, OperatorName.SET_GRAPHICS_STATE_PARAMS,
+            OperatorName.SET_RENDERINGINTENT, OperatorName.SHADING_FILL, OperatorName.SHOW_TEXT,
+            OperatorName.SHOW_TEXT_LINE, OperatorName.MARKED_CONTENT_POINT);
+
+    private static final List<String> CHECK_TAG_AND_PROPERTY_OPERANDS = Arrays.asList( //
+            OperatorName.BEGIN_MARKED_CONTENT_SEQ, OperatorName.MARKED_CONTENT_POINT_WITH_PROPS);
+
+    private static final List<String> CHECK_NUMBER_OPERANDS_6 = Arrays.asList( //
+            OperatorName.CURVE_TO, OperatorName.TYPE3_D1);
+
+    private static final List<String> CHECK_NUMBER_OPERANDS_4 = Arrays.asList( //
+            OperatorName.CURVE_TO_REPLICATE_FINAL_POINT,
+            OperatorName.CURVE_TO_REPLICATE_INITIAL_POINT, OperatorName.APPEND_RECT);
+
+    private static final List<String> CHECK_NUMBER_OPERANDS_2 = Arrays.asList( //
+            OperatorName.MOVE_TO, OperatorName.LINE_TO, OperatorName.TYPE3_D0);
+
+    private static final List<String> CHECK_NUMBER_OPERANDS = Arrays.asList( //
+            OperatorName.NON_STROKING_GRAY, OperatorName.STROKING_COLOR_GRAY,
+            OperatorName.SET_FLATNESS, OperatorName.SET_LINE_MITERLIMIT);
+
+    private static final List<String> CHECK_ARRAY_OPERANDS = Arrays.asList( //
+            OperatorName.SHOW_TEXT_ADJUSTED);
 
     public StubOperator(String name)
     {
@@ -69,168 +104,46 @@ public class StubOperator extends OperatorProcessor
     @Override
     public void process(Operator operator, List<COSBase> arguments) throws IOException
     {
-        String op = operator.getName();
-        if ("S".equals(op))
+        String opName = operator.getName();
+        if (CHECK_NO_OPERANDS.contains(opName))
         {
             checkNoOperands(arguments);
         }
-        else if ("B".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("f".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("F".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("f*".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("b".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("B*".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("b*".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("s".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("EMC".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("BMC".equals(op))
+        else if (CHECK_STRING_OPERANDS.contains(opName))
         {
             checkStringOperands(arguments, 1);
         }
-        else if ("BDC".equals(op))
+        else if (CHECK_TAG_AND_PROPERTY_OPERANDS.contains(opName))
         {
             checkTagAndPropertyOperands(arguments);
         }
-        else if ("DP".equals(op))
-        {
-            checkTagAndPropertyOperands(arguments);
-        }
-        else if ("c".equals(op))
+        else if (CHECK_NUMBER_OPERANDS_6.contains(opName))
         {
             checkNumberOperands(arguments, 6);
         }
-        else if ("v".equals(op))
+        else if (CHECK_NUMBER_OPERANDS_4.contains(opName))
         {
             checkNumberOperands(arguments, 4);
         }
-        else if ("y".equals(op))
-        {
-            checkNumberOperands(arguments, 4);
-        }
-        else if ("d0".equals(op))
+        else if (CHECK_NUMBER_OPERANDS_2.contains(opName))
         {
             checkNumberOperands(arguments, 2);
         }
-        else if ("d1".equals(op))
-        {
-            checkNumberOperands(arguments, 6);
-        }
-        else if ("g".equals(op))
+        else if (CHECK_NUMBER_OPERANDS.contains(opName))
         {
             checkNumberOperands(arguments, 1);
         }
-        else if ("G".equals(op))
-        {
-            checkNumberOperands(arguments, 1);
-        }
-        else if ("gs".equals(op))
-        {
-            checkStringOperands(arguments, 1);
-        }
-        else if ("h".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("i".equals(op))
-        {
-            checkNumberOperands(arguments, 1);
-        }
-        else if ("l".equals(op))
-        {
-            checkNumberOperands(arguments, 2);
-        }
-        else if ("m".equals(op))
-        {
-            checkNumberOperands(arguments, 2);
-        }
-        else if ("M".equals(op))
-        {
-            checkNumberOperands(arguments, 1);
-        }
-        else if ("MP".equals(op))
-        {
-            checkStringOperands(arguments, 1);
-        }
-        else if ("n".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("re".equals(op))
-        {
-            checkNumberOperands(arguments, 4);
-        }
-        else if ("ri".equals(op))
-        {
-            checkStringOperands(arguments, 1);
-        }
-        else if ("s".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("S".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("sh".equals(op))
-        {
-            checkStringOperands(arguments, 1);
-        }
-        else if ("'".equals(op))
-        {
-            checkStringOperands(arguments, 1);
-        }
-        else if ("Tj".equals(op))
-        {
-            checkStringOperands(arguments, 1);
-        }
-        else if ("TJ".equals(op))
+        else if (CHECK_ARRAY_OPERANDS.contains(opName))
         {
             checkArrayOperands(arguments, 1);
         }
-        else if ("W".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("W*".equals(op))
-        {
-            checkNoOperands(arguments);
-        }
-        else if ("\"".equals(op))
+        else if (OperatorName.SHOW_TEXT_LINE_AND_SPACE.equals(opName))
         {
             checkNumberOperands(arguments.subList(0, 2), 2);
             checkStringOperands(arguments.subList(2, arguments.size()), 1);
         }
-        // else
         // ---- Some operators are processed by PDFBox Objects.
-        // ---- Other operators are authorized but it isn't used.
-
+        // ---- Other operators are authorized but not used.
     }
 
     /**
@@ -328,9 +241,8 @@ public class StubOperator extends OperatorProcessor
             throw createInvalidArgumentsError();
         }
 
-        for (int i = 0; i < length; ++i)
+        for (COSBase arg : arguments)
         {
-            COSBase arg = arguments.get(i);
             if (!(arg instanceof COSFloat) && !(arg instanceof COSInteger))
             {
                 throw createInvalidArgumentsError();

@@ -145,7 +145,7 @@ public abstract class PDButton extends PDTerminalField
     }
 
     /**
-     * Sets the selected option given its name.
+     * Set the selected option given its name, and try to update the visual appearance.
      * 
      * @param value Name of option to select
      * @throws IOException if the value could not be set
@@ -381,14 +381,18 @@ public abstract class PDButton extends PDTerminalField
         // update the appearance state (AS)
         for (PDAnnotationWidget widget : getWidgets())
         {
-            PDAppearanceEntry appearanceEntry = widget.getAppearance().getNormalAppearance();
-            if (((COSDictionary) appearanceEntry.getCOSObject()).containsKey(value))
+            if (widget.getAppearance() == null)
             {
-                widget.getCOSObject().setName(COSName.AS, value);
+                continue;
+            }
+            PDAppearanceEntry appearanceEntry = widget.getAppearance().getNormalAppearance();
+            if (appearanceEntry.getCOSObject().containsKey(value))
+            {
+                widget.setAppearanceState(value);
             }
             else
             {
-                widget.getCOSObject().setItem(COSName.AS, COSName.Off);
+                widget.setAppearanceState(COSName.Off.getName());
             }
         }
     }

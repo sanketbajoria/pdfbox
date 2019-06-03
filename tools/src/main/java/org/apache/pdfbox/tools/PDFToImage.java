@@ -22,9 +22,6 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import javax.imageio.ImageIO;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -41,9 +38,6 @@ import org.apache.pdfbox.tools.imageio.ImageIOUtil;
  */
 public final class PDFToImage
 {
-
-    private static final Log LOG = LogFactory.getLog(PDFToImage.class);
-
     private static final String PASSWORD = "-password";
     private static final String START_PAGE = "-startPage";
     private static final String END_PAGE = "-endPage";
@@ -77,17 +71,6 @@ public final class PDFToImage
      */
     public static void main( String[] args ) throws IOException
     {
-        try
-        {
-            // force KCMS (faster than LCMS) if available
-            Class.forName("sun.java2d.cmm.kcms.KcmsServiceProvider");
-            System.setProperty("sun.java2d.cmm", "sun.java2d.cmm.kcms.KcmsServiceProvider");
-        }
-        catch (ClassNotFoundException e)
-        {
-            LOG.debug("KCMS service not found - using LCMS", e);
-        }
-
         // suppress the Dock icon on OS X
         System.setProperty("apple.awt.UIElement", "true");
 
@@ -291,10 +274,10 @@ public final class PDFToImage
             + "  -password  <password>            : Password to decrypt document\n"
             + "  -format <string>                 : Image format: " + getImageFormats() + "\n"
             + "  -prefix <string>                 : Filename prefix for image files\n"
-            + "  -page <number>                   : The only page to extract (1-based)\n"
+            + "  -page <int>                      : The only page to extract (1-based)\n"
             + "  -startPage <int>                 : The first page to start extraction (1-based)\n"
-            + "  -endPage <int>                   : The last page to extract(inclusive)\n"
-            + "  -color <int>                     : The color depth (valid: bilevel, gray, rgb (default), rgba)\n"
+            + "  -endPage <int>                   : The last page to extract (inclusive)\n"
+            + "  -color <string>                  : The color depth (valid: bilevel, gray, rgb (default), rgba)\n"
             + "  -dpi <int>                       : The DPI of the output image, default: screen resolution or 96 if unknown\n"
             + "  -quality <float>                 : The quality to be used when compressing the image (0 < quality <= 1 (default))\n"
             + "  -cropbox <int> <int> <int> <int> : The page area to export\n"

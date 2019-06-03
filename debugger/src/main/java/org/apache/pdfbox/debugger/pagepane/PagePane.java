@@ -54,7 +54,15 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.apache.pdfbox.debugger.ui.HighResolutionImageIcon;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.interactive.action.PDAction;
+import org.apache.pdfbox.pdmodel.interactive.action.PDActionGoTo;
+import org.apache.pdfbox.pdmodel.interactive.action.PDActionURI;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotation;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationLink;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationWidget;
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDDestination;
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDNamedDestination;
+import org.apache.pdfbox.pdmodel.interactive.documentnavigation.destination.PDPageDestination;
 import org.apache.pdfbox.pdmodel.interactive.form.PDAcroForm;
 import org.apache.pdfbox.pdmodel.interactive.form.PDField;
 
@@ -92,6 +100,61 @@ public class PagePane implements ActionListener, AncestorListener, MouseMotionLi
 
     private void initRectMap()
     {
+        try
+        {
+            collectFieldLocations();
+            collectLinkLocations();            
+        }
+        catch (IOException ex)
+        {
+            // ignore
+        }
+    }
+
+    private void collectLinkLocations() throws IOException
+    {
+        for (PDAnnotation annotation : page.getAnnotations())
+        {
+            if (annotation instanceof PDAnnotationLink)
+            {
+                PDAnnotationLink linkAnnotation = (PDAnnotationLink) annotation;
+                PDAction action = linkAnnotation.getAction();
+                if (action instanceof PDActionURI)
+                {
+                    PDActionURI uriAction = (PDActionURI) action;
+                    rectMap.put(annotation.getRectangle(), "URI: " + uriAction.getURI());
+                    continue;
+                }
+                PDDestination destination;
+                if (action instanceof PDActionGoTo)
+                {
+                    PDActionGoTo goToAction = (PDActionGoTo) action;
+                    destination = goToAction.getDestination();
+                }
+                else
+                {
+                    destination = linkAnnotation.getDestination();
+                }
+                if (destination instanceof PDNamedDestination)
+                {
+                    destination = document.getDocumentCatalog().
+                            findNamedDestinationPage((PDNamedDestination) destination);
+                }
+                if (destination instanceof PDPageDestination)
+                {
+                    PDPageDestination pageDestination = (PDPageDestination) destination;
+                    int pageNum = pageDestination.retrievePageNumber();
+                    if (pageNum != -1)
+                    {
+                        rectMap.put(annotation.getRectangle(), "Page destination: " + (pageNum + 1));
+                    }
+                }
+            }
+        }
+    }
+
+    private void collectFieldLocations()
+    {
         PDAcroForm acroForm = document.getDocumentCatalog().getAcroForm();
         if (acroForm == null)
         {
@@ -104,7 +167,7 @@ public class PagePane implements ActionListener, AncestorListener, MouseMotionLi
             {
                 if (page.equals(widget.getPage()))
                 {
-                    rectMap.put(widget.getRectangle(), fullyQualifiedName);
+                    rectMap.put(widget.getRectangle(), "Field name: " + fullyQualifiedName);
                 }
             }
         }
@@ -288,7 +351,7 @@ public class PagePane implements ActionListener, AncestorListener, MouseMotionLi
         {
             if (entry.getKey().contains(x1, y1))
             {
-                text += ", field: " + rectMap.get(entry.getKey());
+                text += ", " + rectMap.get(entry.getKey());
                 break;
             }
         }

@@ -31,11 +31,15 @@ import javax.crypto.Cipher;
 import junit.framework.TestCase;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.pdfbox.cos.COSDictionary;
+import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.cos.COSString;
 import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDDocumentCatalog;
 import org.apache.pdfbox.pdmodel.PDDocumentNameDictionary;
 import org.apache.pdfbox.pdmodel.PDEmbeddedFilesNameTreeNode;
+import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.common.filespecification.PDComplexFileSpecification;
 import org.apache.pdfbox.pdmodel.common.filespecification.PDEmbeddedFile;
 import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
@@ -263,6 +267,52 @@ public class TestSymmetricKeyEncryption extends TestCase
                 inputFileWithEmbeddedFileAsByteArray, extractedEmbeddedFile, USERPASSWORD, OWNERPASSWORD);
     }
 
+    /**
+     * PDFBOX-4453: verify that identical encrypted strings are really decrypted each.
+     * 
+     * @throws IOException 
+     */
+    public void testPDFBox4453() throws IOException
+    {
+        final int TESTCOUNT = 1000;
+        File file = new File(testResultsDir,"PDFBOX-4453.pdf");
+        try (PDDocument doc = new PDDocument())
+        {
+            doc.addPage(new PDPage());
+            for (int i = 0; i < TESTCOUNT; ++i)
+            {
+                // strings must be in different dictionaries so that the actual
+                // encryption key changes
+                COSDictionary dict = new COSDictionary();
+                doc.getPage(0).getCOSObject().setItem(COSName.getPDFName("_Test-" + i), dict);
+                // need two different keys so that there are both encrypted and decrypted COSStrings
+                // with value "0"
+                dict.setString("key1", "3");
+                dict.setString("key2", "0");
+            }
+            
+            //RC4-40
+            StandardProtectionPolicy spp =
+                    new StandardProtectionPolicy("12345", "", new AccessPermission());
+            spp.setEncryptionKeyLength(40);
+            spp.setPreferAES(false);
+            doc.protect(spp);
+            doc.save(file);
+        }
+
+        try (PDDocument doc = PDDocument.load(file))
+        {
+            Assert.assertTrue(doc.isEncrypted());
+            for (int i = 0; i < TESTCOUNT; ++i)
+            {
+                COSDictionary dict =
+                        doc.getPage(0).getCOSObject().getCOSDictionary(COSName.getPDFName("_Test-" + i));
+                Assert.assertEquals("3", dict.getString("key1"));
+                Assert.assertEquals("0", dict.getString("key2"));
+            }
+        }
+    }
+
     private void testSymmEncrForKeySize(int keyLength, boolean preferAES,
             int sizePriorToEncr, byte[] inputFileAsByteArray,
             String userpassword, String ownerpassword,
@@ -315,11 +365,10 @@ public class TestSymmetricKeyEncryption extends TestCase
             PDDocument doc, String prefix, AccessPermission permission,
             String userpassword, String ownerpassword) throws IOException
     {
-        AccessPermission ap = new AccessPermission();
-        StandardProtectionPolicy spp = new StandardProtectionPolicy(ownerpassword, userpassword, ap);
+        StandardProtectionPolicy spp = new StandardProtectionPolicy(ownerpassword, userpassword,
+                permission);
         spp.setEncryptionKeyLength(keyLength);
         spp.setPreferAES(preferAES);
-        spp.setPermissions(permission);
         
         // This must have no effect and should only log a warning.
         doc.setAllSecurityToBeRemoved(true);
@@ -335,10 +384,8 @@ public class TestSymmetricKeyEncryption extends TestCase
                 + "-bit " + (preferAES ? "AES" : "RC4") + " encrypted pdf should not have same size as plain one",
                 sizeEncrypted != sizePriorToEncr);
 
-        PDDocument encryptedDoc;
-
         // test with owner password => full permissions
-        encryptedDoc = PDDocument.load(pdfFile, ownerpassword);
+        PDDocument encryptedDoc = PDDocument.load(pdfFile, ownerpassword);
         Assert.assertTrue(encryptedDoc.isEncrypted());
         Assert.assertTrue(encryptedDoc.getCurrentAccessPermission().isOwnerPermission());
 

@@ -186,6 +186,8 @@ public class COSParser extends BaseParser
     
     /**
      * Default constructor.
+     *
+     * @param source input representing the pdf.
      */
     public COSParser(RandomAccessRead source)
     {
@@ -324,10 +326,9 @@ public class COSParser extends BaseParser
             {
                 // xref table and trailer
                 // use existing parser to parse xref table
-                parseXrefTable(prev);
-                if (!parseTrailer())
+                if (!parseXrefTable(prev) || !parseTrailer())
                 {
-                    throw new IOException("Expected trailer object at position: "
+                    throw new IOException("Expected trailer object at offset "
                             + source.getPosition());
                 }
                 COSDictionary trailer = xrefTrailerResolver.getCurrentTrailer();
@@ -710,6 +711,12 @@ public class COSParser extends BaseParser
                                             LOG.debug("Set missing " + fileOffset + " for object "
                                                     + key);
                                             document.getXrefTable().put(key, fileOffset);
+                                        }
+                                        else
+                                        {
+                                            LOG.warn("Invalid object stream xref object reference for key '"
+                                                        + objKey + "': " + fileOffset);
+                                            continue;
                                         }
                                     }
                                     else
@@ -1608,8 +1615,6 @@ public class COSParser extends BaseParser
     private long bfSearchForXRef(long xrefOffset) throws IOException
     {
         long newOffset = -1;
-        long newOffsetTable;
-        long newOffsetStream;
 
         // initialize bfSearchXRefTablesOffsets -> not null
         bfSearchForXRefTables();
@@ -1617,10 +1622,10 @@ public class COSParser extends BaseParser
         bfSearchForXRefStreams();
 
         // TODO to be optimized, this won't work in every case
-        newOffsetTable = searchNearestValue(bfSearchXRefTablesOffsets, xrefOffset);
+        long newOffsetTable = searchNearestValue(bfSearchXRefTablesOffsets, xrefOffset);
         
         // TODO to be optimized, this won't work in every case
-        newOffsetStream = searchNearestValue(bfSearchXRefStreamsOffsets, xrefOffset);
+        long newOffsetStream = searchNearestValue(bfSearchXRefStreamsOffsets, xrefOffset);
 
         // choose the nearest value
         if (newOffsetTable > -1 && newOffsetStream > -1)
@@ -1699,29 +1704,23 @@ public class COSParser extends BaseParser
                     skipSpaces();
                     COSDictionary trailerDict = parseCOSDictionary();
                     StringBuilder trailerKeys = new StringBuilder();
-                    if (trailerDict.containsKey(COSName.ROOT))
+                    COSObject rootObj = trailerDict.getCOSObject(COSName.ROOT);
+                    if (rootObj != null)
                     {
-                        COSBase rootObj = trailerDict.getItem(COSName.ROOT);
-                        if (rootObj instanceof COSObject)
-                        {
-                            long objNumber = ((COSObject) rootObj).getObjectNumber();
-                            int genNumber = ((COSObject) rootObj).getGenerationNumber();
-                            trailerKeys.append(objNumber).append(" ");
-                            trailerKeys.append(genNumber).append(" ");
-                            rootFound = true;
-                        }
+                        long objNumber = rootObj.getObjectNumber();
+                        int genNumber = rootObj.getGenerationNumber();
+                        trailerKeys.append(objNumber).append(" ");
+                        trailerKeys.append(genNumber).append(" ");
+                        rootFound = true;
                     }
-                    if (trailerDict.containsKey(COSName.INFO))
+                    COSObject infoObj = trailerDict.getCOSObject(COSName.INFO);
+                    if (infoObj != null)
                     {
-                        COSBase infoObj = trailerDict.getItem(COSName.INFO);
-                        if (infoObj instanceof COSObject)
-                        {
-                            long objNumber = ((COSObject) infoObj).getObjectNumber();
-                            int genNumber = ((COSObject) infoObj).getGenerationNumber();
-                            trailerKeys.append(objNumber).append(" ");
-                            trailerKeys.append(genNumber).append(" ");
-                            infoFound = true;
-                        }
+                        long objNumber = infoObj.getObjectNumber();
+                        int genNumber = infoObj.getGenerationNumber();
+                        trailerKeys.append(objNumber).append(" ");
+                        trailerKeys.append(genNumber).append(" ");
+                        infoFound = true;
                     }
                     if (rootFound && infoFound)
                     {
@@ -1878,7 +1877,6 @@ public class COSParser extends BaseParser
                 long currentPosition = source.getPosition();
                 // search backwards for the beginning of the object
                 long newOffset = -1;
-                COSObjectKey streamObjectKey = null;
                 boolean objFound = false;
                 for (int i = 1; i < 40 && !objFound; i++)
                 {
@@ -1913,7 +1911,7 @@ public class COSParser extends BaseParser
                                             newOffset = source.getPosition();
                                             long objNumber = readObjectNumber();
                                             int genNumber = readGenerationNumber();
-                                            streamObjectKey = new COSObjectKey(objNumber,
+                                            COSObjectKey streamObjectKey = new COSObjectKey(objNumber,
                                                     genNumber);
                                             bfSearchObjStreamsOffsets.put(newOffset,
                                                     streamObjectKey);
@@ -2002,7 +2000,7 @@ public class COSParser extends BaseParser
                 }
                 int start = 0;
                 // skip spaces
-                while (numbersBytes[start] == 32)
+                while (start < numbersBytes.length && numbersBytes[start] == 32)
                 {
                     start++;
                 }
@@ -2019,13 +2017,26 @@ public class COSParser extends BaseParser
                 Map<COSObjectKey, Long> xrefOffset = xrefTrailerResolver.getXrefTable();
                 for (int i = 0; i < nrOfObjects; i++)
                 {
-                    long objNumber = Long.parseLong(numbers[i * 2]);
-                    COSObjectKey objKey = new COSObjectKey(objNumber, 0);
-                    Long existingOffset = bfSearchCOSObjectKeyOffsets.get(objKey);
-                    if (existingOffset == null || offset > existingOffset)
+                    try
                     {
-                        bfSearchCOSObjectKeyOffsets.put(objKey, -stmObjNumber);
-                        xrefOffset.put(objKey, -stmObjNumber);
+                        long objNumber = Long.parseLong(numbers[i * 2]);
+                        COSObjectKey objKey = new COSObjectKey(objNumber, 0);
+                        Long existingOffset = bfSearchCOSObjectKeyOffsets.get(objKey);
+                        if (existingOffset != null && existingOffset < 0)
+                        {
+                            // translate stream object key to its offset
+                            COSObjectKey objStmKey = new COSObjectKey(Math.abs(existingOffset), 0);
+                            existingOffset = bfSearchCOSObjectKeyOffsets.get(objStmKey);
+                        }
+                        if (existingOffset == null || offset > existingOffset)
+                        {
+                            bfSearchCOSObjectKeyOffsets.put(objKey, -stmObjNumber);
+                            xrefOffset.put(objKey, -stmObjNumber);
+                        }
+                    }
+                    catch (NumberFormatException exception)
+                    {
+                        LOG.debug("Skipped corrupt object key in stream: " + stmObjNumber);
                     }
                 }
             }
@@ -2226,7 +2237,7 @@ public class COSParser extends BaseParser
 
     private COSDictionary retrieveCOSDictionary(COSObject object) throws IOException
     {
-        COSObjectKey key = new COSObjectKey((COSObject) object);
+        COSObjectKey key = new COSObjectKey(object);
         Long offset = bfSearchCOSObjectKeyOffsets.get(key);
         if (offset != null)
         {
@@ -2278,10 +2289,11 @@ public class COSParser extends BaseParser
      * Check if all entries of the pages dictionary are present. Those which can't be dereferenced are removed.
      * 
      * @param root the root dictionary of the pdf
+     * @throws java.io.IOException if the page tree root is null
      */
-    protected void checkPages(COSDictionary root)
+    protected void checkPages(COSDictionary root) throws IOException
     {
-        if (trailerWasRebuild && root != null)
+        if (trailerWasRebuild)
         {
             // check if all page objects are dereferenced
             COSBase pages = root.getDictionaryObject(COSName.PAGES);
@@ -2289,6 +2301,10 @@ public class COSParser extends BaseParser
             {
                 checkPagesDictionary((COSDictionary) pages, new HashSet<COSObject>());
             }
+        }
+        if (!(root.getDictionaryObject(COSName.PAGES) instanceof COSDictionary))
+        {
+            throw new IOException("Page tree root must be a dictionary");
         }
     }
 
@@ -2467,7 +2483,7 @@ public class COSParser extends BaseParser
                 if (source.getPosition() == trailerOffset)
                 {
                     // warn only the first time
-                    LOG.warn("Expected trailer object at position " + trailerOffset
+                    LOG.warn("Expected trailer object at offset " + trailerOffset
                             + ", keep trying");
                 }
                 readLine();
@@ -2658,12 +2674,31 @@ public class COSParser extends BaseParser
             if (splitString.length != 2)
             {
                 LOG.warn("Unexpected XRefTable Entry: " + currentLine);
-                break;
+                return false;
             }
             // first obj id
-            long currObjID = Long.parseLong(splitString[0]);
+            long currObjID;
+            try
+            {
+                currObjID = Long.parseLong(splitString[0]);
+            }
+            catch (NumberFormatException exception)
+            {
+                LOG.warn("XRefTable: invalid ID for the first object: " + currentLine);
+                return false;
+            }
+
             // the number of objects in the xref table
-            int count = Integer.parseInt(splitString[1]);
+            int count = 0;
+            try
+            {
+                count = Integer.parseInt(splitString[1]);
+            }
+            catch (NumberFormatException exception)
+            {
+                LOG.warn("XRefTable: invalid number of objects: " + currentLine);
+                return false;
+            }
             
             skipSpaces();
             for(int i = 0; i < count; i++)
@@ -2808,7 +2843,7 @@ public class COSParser extends BaseParser
             }
         }
         // parse catalog or root object
-        COSObject root = (COSObject) trailer.getItem(COSName.ROOT);
+        COSObject root = trailer.getCOSObject(COSName.ROOT);
         if (root == null)
         {
             throw new IOException("Missing root object specification in trailer.");
@@ -2886,6 +2921,12 @@ public class COSParser extends BaseParser
     private void parseDictionaryRecursive(COSObject dictionaryObject) throws IOException
     {
         parseObjectDynamically(dictionaryObject, true);
+        if (!(dictionaryObject.getObject() instanceof COSDictionary))
+        {
+            // we can't be lenient here, this is called by prepareDecryption()
+            // to get the encryption directory
+            throw new IOException("Dictionary object expected at offset " + source.getPosition());
+        }
         COSDictionary dictionary = (COSDictionary) dictionaryObject.getObject();
         for (COSBase value : dictionary.getValues())
         {

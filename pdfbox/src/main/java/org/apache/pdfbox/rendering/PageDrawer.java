@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Stack;
+import java.util.StringTokenizer;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -61,7 +62,9 @@ import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDResources;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.common.function.PDFunction;
+import org.apache.pdfbox.pdmodel.documentinterchange.markedcontent.PDPropertyList;
 import org.apache.pdfbox.pdmodel.font.PDFont;
+import org.apache.pdfbox.pdmodel.font.PDType3Font;
 import org.apache.pdfbox.pdmodel.font.PDVectorFont;
 import org.apache.pdfbox.pdmodel.graphics.PDLineDashPattern;
 import org.apache.pdfbox.pdmodel.graphics.PDXObject;
@@ -71,8 +74,12 @@ import org.apache.pdfbox.pdmodel.graphics.color.PDColorSpace;
 import org.apache.pdfbox.pdmodel.graphics.color.PDDeviceGray;
 import org.apache.pdfbox.pdmodel.graphics.color.PDICCBased;
 import org.apache.pdfbox.pdmodel.graphics.color.PDPattern;
+import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
 import org.apache.pdfbox.pdmodel.graphics.form.PDTransparencyGroup;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImage;
+import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentGroup;
+import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentGroup.RenderState;
+import org.apache.pdfbox.pdmodel.graphics.optionalcontent.PDOptionalContentMembershipDictionary;
 import org.apache.pdfbox.pdmodel.graphics.pattern.PDAbstractPattern;
 import org.apache.pdfbox.pdmodel.graphics.pattern.PDShadingPattern;
 import org.apache.pdfbox.pdmodel.graphics.pattern.PDTilingPattern;
@@ -83,6 +90,8 @@ import org.apache.pdfbox.pdmodel.graphics.state.PDSoftMask;
 import org.apache.pdfbox.pdmodel.graphics.state.RenderingMode;
 import org.apache.pdfbox.pdmodel.interactive.annotation.AnnotationFilter;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotation;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceDictionary;
+import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationUnknown;
 import org.apache.pdfbox.util.Matrix;
 import org.apache.pdfbox.util.Vector;
 
@@ -136,6 +145,14 @@ public class PageDrawer extends PDFGraphicsStreamEngine
     
     private final Stack<TransparencyGroup> transparencyGroupStack = new Stack<>();
 
+    // if greater zero the content is hidden and wil not be rendered
+    private int nestedHiddenOCGCount;
+
+    private final RenderDestination destination;
+    private final RenderingHints renderingHints;
+
+    static final int JAVA_VERSION = PageDrawer.getJavaVersion();
+
     /**
     * Default annotations filter, returns all annotations
     */
@@ -159,6 +176,8 @@ public class PageDrawer extends PDFGraphicsStreamEngine
         super(parameters.getPage());
         this.renderer = parameters.getRenderer();
         this.subsamplingAllowed = parameters.isSubsamplingAllowed();
+        this.destination = parameters.getDestination();
+        this.renderingHints = parameters.getRenderingHints();
     }
 
     /**
@@ -212,12 +231,7 @@ public class PageDrawer extends PDFGraphicsStreamEngine
      */
     private void setRenderingHints()
     {
-        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
-                                  RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-        graphics.setRenderingHint(RenderingHints.KEY_RENDERING,
-                                  RenderingHints.VALUE_RENDER_QUALITY);
-        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
-                                  RenderingHints.VALUE_ANTIALIAS_ON);
+        graphics.addRenderingHints(renderingHints);
     }
 
     /**
@@ -419,7 +433,7 @@ public class PageDrawer extends PDFGraphicsStreamEngine
             cache = new GlyphCache(vectorFont);
             glyphCaches.put(font, cache);
         }
-        
+
         GeneralPath path = cache.getPathForCharacterCode(code);
         drawGlyph(path, font, code, displacement, at);
     }
@@ -438,7 +452,7 @@ public class PageDrawer extends PDFGraphicsStreamEngine
     {
         PDGraphicsState state = getGraphicsState();
         RenderingMode renderingMode = state.getTextState().getRenderingMode();
-        
+
         if (path != null)
         {
             // Stretch non-embedded glyph if it does not match the height/width contained in the PDF.
@@ -463,7 +477,10 @@ public class PageDrawer extends PDFGraphicsStreamEngine
                 graphics.setComposite(state.getNonStrokingJavaComposite());
                 graphics.setPaint(getNonStrokingPaint());
                 setClip();
-                graphics.fill(glyph);
+                if (isContentRendered())
+                {
+                    graphics.fill(glyph);
+                }
             }
 
             if (renderingMode.isStroke())
@@ -472,7 +489,10 @@ public class PageDrawer extends PDFGraphicsStreamEngine
                 graphics.setPaint(getStrokingPaint());
                 graphics.setStroke(getStroke());
                 setClip();
-                graphics.draw(glyph);
+                if (isContentRendered())
+                {
+                    graphics.draw(glyph);
+                }
             }
 
             if (renderingMode.isClip())
@@ -481,7 +501,19 @@ public class PageDrawer extends PDFGraphicsStreamEngine
             }
         }
     }
-    
+
+    @Override
+    protected void showType3Glyph(Matrix textRenderingMatrix, PDType3Font font, int code,
+            String unicode, Vector displacement) throws IOException
+    {
+        PDGraphicsState state = getGraphicsState();
+        RenderingMode renderingMode = state.getTextState().getRenderingMode();
+        if (!RenderingMode.NEITHER.equals(renderingMode))
+        {
+            super.showType3Glyph(textRenderingMatrix, font, code, unicode, displacement);
+        }
+    }
+
     @Override
     public void appendRectangle(Point2D p0, Point2D p1, Point2D p2, Point2D p3)
     {
@@ -508,7 +540,8 @@ public class PageDrawer extends PDFGraphicsStreamEngine
         if (COSName.LUMINOSITY.equals(softMask.getSubType()))
         {
             COSArray backdropColorArray = softMask.getBackdropColor();
-            PDColorSpace colorSpace = softMask.getGroup().getGroup().getColorSpace();
+            PDTransparencyGroup form = softMask.getGroup();
+            PDColorSpace colorSpace = form.getGroup().getColorSpace(form.getResources());
             if (colorSpace != null && backdropColorArray != null)
             {
                 backdropColor = new PDColor(backdropColorArray, colorSpace);
@@ -554,9 +587,9 @@ public class PageDrawer extends PDFGraphicsStreamEngine
     private void adjustRectangle(Rectangle2D r)
     {
         Matrix m = new Matrix(xform);
-        double scaleX = m.getScalingFactorX();
-        double scaleY = m.getScalingFactorY();
-        
+        float scaleX = Math.abs(m.getScalingFactorX());
+        float scaleY = Math.abs(m.getScalingFactorY());
+
         AffineTransform adjustedTransform = new AffineTransform(xform);
         adjustedTransform.scale(1.0 / scaleX, 1.0 / scaleY);
         r.setRect(adjustedTransform.createTransformedShape(r).getBounds2D());
@@ -567,8 +600,8 @@ public class PageDrawer extends PDFGraphicsStreamEngine
     {
         AffineTransform at = new AffineTransform(xform);
         Matrix m = new Matrix(at);
-        at.scale(1.0 / m.getScalingFactorX(), 1.0 / m.getScalingFactorY());
-        
+        at.scale(1.0 / Math.abs(m.getScalingFactorX()), 1.0 / Math.abs(m.getScalingFactorY()));
+
         Rectangle originalBounds = new Rectangle(gray.getWidth(), gray.getHeight());
         Rectangle2D transformedBounds = at.createTransformedShape(originalBounds).getBounds2D();
         at.preConcatenate(AffineTransform.getTranslateInstance(-transformedBounds.getMinX(), 
@@ -615,18 +648,9 @@ public class PageDrawer extends PDFGraphicsStreamEngine
         }
 
         PDLineDashPattern dashPattern = state.getLineDashPattern();
-        int phaseStart = dashPattern.getPhase();
-        float[] dashArray = dashPattern.getDashArray();
-        // apply the CTM
-        for (int i = 0; i < dashArray.length; ++i)
-        {
-            // minimum line dash width avoids JVM crash,
-            // see PDFBOX-2373, PDFBOX-2929, PDFBOX-3204, PDFBOX-3813
-            // also avoid 0 in array like "[ 0 1000 ] 0 d", see PDFBOX-3724
-            float w = transformWidth(dashArray[i]);
-            dashArray[i] = Math.max(w, 0.062f);
-        }
-        phaseStart = (int) transformWidth(phaseStart);
+        float phaseStart = dashPattern.getPhase();
+        float[] dashArray = getDashArray(dashPattern);
+        phaseStart = transformWidth(phaseStart);
 
         // empty dash array is illegal
         // avoid also infinite and NaN values (PDFBOX-3360)
@@ -649,6 +673,41 @@ public class PageDrawer extends PDFGraphicsStreamEngine
                                state.getMiterLimit(), dashArray, phaseStart);
     }
 
+    private float[] getDashArray(PDLineDashPattern dashPattern)
+    {
+        float[] dashArray = dashPattern.getDashArray();
+        if (JAVA_VERSION < 10)
+        {
+            float scalingFactorX = new Matrix(xform).getScalingFactorX();
+            for (int i = 0; i < dashArray.length; ++i)
+            {
+                // apply the CTM
+                float w = transformWidth(dashArray[i]);
+                // minimum line dash width avoids JVM crash,
+                // see PDFBOX-2373, PDFBOX-2929, PDFBOX-3204, PDFBOX-3813
+                // also avoid 0 in array like "[ 0 1000 ] 0 d", see PDFBOX-3724
+                if (scalingFactorX < 0.5f)
+                {
+                    // PDFBOX-4492
+                    dashArray[i] = Math.max(w, 0.2f);
+                }
+                else
+                {
+                    dashArray[i] = Math.max(w, 0.062f);
+                }
+            }
+        }
+        else
+        {
+            for (int i = 0; i < dashArray.length; ++i)
+            {
+                // apply the CTM
+                dashArray[i] = transformWidth(dashArray[i]);
+            }
+        }
+        return dashArray;
+    }
+
     @Override
     public void strokePath() throws IOException
     {
@@ -657,7 +716,10 @@ public class PageDrawer extends PDFGraphicsStreamEngine
         graphics.setStroke(getStroke());
         setClip();
         //TODO bbox of shading pattern should be used here? (see fillPath)
-        graphics.draw(linePath);
+        if (isContentRendered())
+        {
+            graphics.draw(linePath);
+        }
         linePath.reset();
     }
 
@@ -682,17 +744,22 @@ public class PageDrawer extends PDFGraphicsStreamEngine
                                       RenderingHints.VALUE_ANTIALIAS_OFF);
         }
 
+        Shape shape;
         if (!(graphics.getPaint() instanceof Color))
         {
             // apply clip to path to avoid oversized device bounds in shading contexts (PDFBOX-2901)
             Area area = new Area(linePath);
             area.intersect(new Area(graphics.getClip()));
             intersectShadingBBox(getGraphicsState().getNonStrokingColor(), area);
-            graphics.fill(area);
+            shape = area;
         }
         else
         {
-            graphics.fill(linePath);
+            shape = linePath;
+        }
+        if (isContentRendered())
+        {
+            graphics.fill(shape);
         }
         
         linePath.reset();
@@ -939,9 +1006,12 @@ public class PageDrawer extends PDFGraphicsStreamEngine
                 // draw the image
                 setClip();
                 graphics.setComposite(getGraphicsState().getNonStrokingJavaComposite());
-                graphics.drawImage(renderedPaint, 
-                        AffineTransform.getTranslateInstance(bounds.getMinX(), bounds.getMinY()), 
-                        null);
+                if (isContentRendered())
+                {
+                    graphics.drawImage(renderedPaint,
+                            AffineTransform.getTranslateInstance(bounds.getMinX(), bounds.getMinY()),
+                            null);
+                }
             }
             else
             {
@@ -1023,7 +1093,10 @@ public class PageDrawer extends PDFGraphicsStreamEngine
             awtPaint = applySoftMaskToPaint(awtPaint, softMask);
             graphics.setPaint(awtPaint);
             Rectangle2D unitRect = new Rectangle2D.Float(0, 0, 1, 1);
-            graphics.fill(at.createTransformedShape(unitRect));
+            if (isContentRendered())
+            {
+                graphics.fill(at.createTransformedShape(unitRect));
+            }
         }
         else
         {
@@ -1037,7 +1110,10 @@ public class PageDrawer extends PDFGraphicsStreamEngine
             int height = image.getHeight();
             imageTransform.scale(1.0 / width, -1.0 / height);
             imageTransform.translate(0, -height);
-            graphics.drawImage(image, imageTransform, null);
+            if (isContentRendered())
+            {
+                graphics.drawImage(image, imageTransform, null);
+            }
         }
     }
 
@@ -1145,15 +1221,19 @@ public class PageDrawer extends PDFGraphicsStreamEngine
         // get the transformed BBox and intersect with current clipping path
         // need to do it here and not in shading getRaster() because it may have been rotated
         PDRectangle bbox = shading.getBBox();
+        Area area;
         if (bbox != null)
         {
-            Area bboxArea = new Area(bbox.transform(ctm));
-            bboxArea.intersect(getGraphicsState().getCurrentClippingPath());
-            graphics.fill(bboxArea);
+            area = new Area(bbox.transform(ctm));
+            area.intersect(getGraphicsState().getCurrentClippingPath());
         }
         else
         {
-            graphics.fill(getGraphicsState().getCurrentClippingPath());
+            area = getGraphicsState().getCurrentClippingPath();
+        }
+        if (isContentRendered())
+        {
+            graphics.fill(area);
         }
     }
 
@@ -1161,8 +1241,6 @@ public class PageDrawer extends PDFGraphicsStreamEngine
     public void showAnnotation(PDAnnotation annotation) throws IOException
     {
         lastClip = null;
-        //TODO support more annotation flags (Invisible, NoZoom, NoRotate)
-        // Example for NoZoom can be found in p5 of PDFBOX-2348
         int deviceType = -1;
         if (graphics.getDeviceConfiguration() != null && 
             graphics.getDeviceConfiguration().getDevice() != null)
@@ -1181,19 +1259,63 @@ public class PageDrawer extends PDFGraphicsStreamEngine
         {
             return;
         }
-        if (annotation.getAppearance() == null)
+        if (annotation.isInvisible() && annotation instanceof PDAnnotationUnknown)
+        {
+            // "If set, do not display the annotation if it does not belong to one
+            // of the standard annotation types and no annotation handler is available."
+            return;
+        }
+        //TODO support NoZoom, example can be found in p5 of PDFBOX-2348
+
+        if (isHiddenOCG(annotation.getOptionalContent()))
+        {
+            return;
+        }
+
+        PDAppearanceDictionary appearance = annotation.getAppearance();
+        if (appearance == null || appearance.getNormalAppearance() == null)
         {
             // TODO: Improve memory consumption by passing a ScratchFile
             annotation.constructAppearances();
         }
-        super.showAnnotation(annotation);
+        if (annotation.isNoRotate() && getCurrentPage().getRotation() != 0)
+        {
+            PDRectangle rect = annotation.getRectangle();
+            AffineTransform savedTransform = graphics.getTransform();
+            // "The upper-left corner of the annotation remains at the same point in
+            //  default user space; the annotation pivots around that point."
+            graphics.rotate(Math.toRadians(getCurrentPage().getRotation()),
+                    rect.getLowerLeftX(), rect.getUpperRightY());
+            super.showAnnotation(annotation);
+            graphics.setTransform(savedTransform);
+        }
+        else
+        {
+            super.showAnnotation(annotation);
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void showForm(PDFormXObject form) throws IOException
+    {
+        if (isContentRendered())
+        {
+            super.showForm(form);
+        }
     }
 
     @Override
     public void showTransparencyGroup(PDTransparencyGroup form) throws IOException
     {
-        TransparencyGroup group =
-                new TransparencyGroup(form, false, getGraphicsState().getCurrentTransformationMatrix(), null);
+        if (!isContentRendered())
+        {
+            return;
+        }
+        TransparencyGroup group
+                = new TransparencyGroup(form, false, getGraphicsState().getCurrentTransformationMatrix(), null);
         BufferedImage image = group.getImage();
         if (image == null)
         {
@@ -1238,12 +1360,18 @@ public class PageDrawer extends PDFGraphicsStreamEngine
                     new Rectangle2D.Float(0, 0, image.getWidth(), image.getHeight()));
             awtPaint = applySoftMaskToPaint(awtPaint, softMask);
             graphics.setPaint(awtPaint);
-            graphics.fill(
-                    new Rectangle2D.Float(0, 0, bbox.getWidth() * xScale, bbox.getHeight() * yScale));
+            if (isContentRendered())
+            {
+                graphics.fill(
+                        new Rectangle2D.Float(0, 0, bbox.getWidth() * xScale, bbox.getHeight() * yScale));
+            }
         }
         else
         {
-            graphics.drawImage(image, null, null);
+            if (isContentRendered())
+            {
+                graphics.drawImage(image, null, null);
+            }
         }
 
         graphics.setTransform(prev);
@@ -1263,6 +1391,8 @@ public class PageDrawer extends PDFGraphicsStreamEngine
         private final int maxY;
         private final int width;
         private final int height;
+        private final float scaleX;
+        private final float scaleY;
 
         /**
          * Creates a buffered image for a transparency group result.
@@ -1292,6 +1422,9 @@ public class PageDrawer extends PDFGraphicsStreamEngine
             Area clip = (Area)getGraphicsState().getCurrentClippingPath().clone();
             clip.intersect(new Area(transformedBox));
             Rectangle2D clipRect = clip.getBounds2D();
+            Matrix m = new Matrix(xform);
+            scaleX = Math.abs(m.getScalingFactorX());
+            scaleY = Math.abs(m.getScalingFactorY());
             if (clipRect.isEmpty())
             {
                 image = null;
@@ -1308,8 +1441,7 @@ public class PageDrawer extends PDFGraphicsStreamEngine
                                         (float)clipRect.getWidth(), (float)clipRect.getHeight());
 
             // apply the underlying Graphics2D device's DPI transform
-            Matrix m = new Matrix(xform);
-            AffineTransform dpiTransform = AffineTransform.getScaleInstance(Math.abs(m.getScalingFactorX()), Math.abs(m.getScalingFactorY()));
+            AffineTransform dpiTransform = AffineTransform.getScaleInstance(scaleX, scaleY);
             Rectangle2D bounds = dpiTransform.createTransformedShape(clip.getBounds2D()).getBounds2D();
 
             minX = (int) Math.floor(bounds.getMinX());
@@ -1321,7 +1453,7 @@ public class PageDrawer extends PDFGraphicsStreamEngine
             height = maxY - minY;
 
             // FIXME - color space
-            if (isGray(form.getGroup().getColorSpace()))
+            if (isGray(form.getGroup().getColorSpace(form.getResources())))
             {
                 image = create2ByteGrayAlphaImage(width, height);
             }
@@ -1384,12 +1516,12 @@ public class PageDrawer extends PDFGraphicsStreamEngine
             g.transform(dpiTransform);
 
             AffineTransform xformOriginal = xform;
-            xform = AffineTransform.getScaleInstance(m.getScalingFactorX(), m.getScalingFactorY());
+            xform = AffineTransform.getScaleInstance(scaleX, scaleY);
             PDRectangle pageSizeOriginal = pageSize;
-            pageSize = new PDRectangle(minX / Math.abs(m.getScalingFactorX()), 
-                                       minY / Math.abs(m.getScalingFactorY()),
-                        (float) bounds.getWidth() / Math.abs(m.getScalingFactorX()),
-                        (float) bounds.getHeight() / Math.abs(m.getScalingFactorY()));
+            pageSize = new PDRectangle(minX / scaleX, 
+                                       minY / scaleY,
+                        (float) bounds.getWidth() / scaleX,
+                        (float) bounds.getHeight() / scaleY);
             int clipWindingRuleOriginal = clipWindingRule;
             clipWindingRule = -1;
             GeneralPath linePathOriginal = linePath;
@@ -1442,9 +1574,9 @@ public class PageDrawer extends PDFGraphicsStreamEngine
              */
             int[] bandOffsets = new int[] {1, 0};
             int bands = bandOffsets.length;
-            
+
             /**
-             * Color Model usesd for raw GRAY + ALPHA
+             * Color Model used for raw GRAY + ALPHA
              */
             final ColorModel CM_GRAY_ALPHA
                 = new ComponentColorModel(
@@ -1498,12 +1630,11 @@ public class PageDrawer extends PDFGraphicsStreamEngine
         {
             Point2D size = new Point2D.Double(pageSize.getWidth(), pageSize.getHeight());
             // apply the underlying Graphics2D device's DPI transform and y-axis flip
-            Matrix m = new Matrix(xform);
-            AffineTransform dpiTransform = AffineTransform.getScaleInstance(Math.abs(m.getScalingFactorX()), Math.abs(m.getScalingFactorY()));
+            AffineTransform dpiTransform = AffineTransform.getScaleInstance(scaleX, scaleY);
             size = dpiTransform.transform(size, size);
             // Flip y
-            return new Rectangle2D.Double(minX - pageSize.getLowerLeftX() * m.getScalingFactorX(),
-                    size.getY() - minY - height + pageSize.getLowerLeftY() * m.getScalingFactorY(),
+            return new Rectangle2D.Double(minX - pageSize.getLowerLeftX() * scaleX,
+                    size.getY() - minY - height + pageSize.getLowerLeftY() * scaleY,
                     width, height);
         }
     }
@@ -1556,5 +1687,147 @@ public class PageDrawer extends PDFGraphicsStreamEngine
         }
 
         return false;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void beginMarkedContentSequence(COSName tag, COSDictionary properties)
+    {
+        if (nestedHiddenOCGCount > 0)
+        {
+            nestedHiddenOCGCount++;
+            return;
+        }
+        if (tag == null || getPage().getResources() == null)
+        {
+            return;
+        }
+        if (isHiddenOCG(getPage().getResources().getProperties(tag)))
+        {
+            nestedHiddenOCGCount = 1;
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void endMarkedContentSequence()
+    {
+        if (nestedHiddenOCGCount > 0)
+        {
+            nestedHiddenOCGCount--;
+        }
+    }
+
+    private boolean isContentRendered()
+    {
+        return nestedHiddenOCGCount <= 0;
+    }
+
+    private boolean isHiddenOCG(PDPropertyList propertyList)
+    {
+        if (propertyList instanceof PDOptionalContentGroup)
+        {
+            PDOptionalContentGroup group = (PDOptionalContentGroup) propertyList;
+            RenderState printState = group.getRenderState(destination);
+            if (printState == null)
+            {
+                if (!getRenderer().isGroupEnabled(group))
+                {
+                    return true;
+                }
+            }
+            else if (RenderState.OFF.equals(printState))
+            {
+                return true;
+            }
+        }
+        else if (propertyList instanceof PDOptionalContentMembershipDictionary)
+        {
+            return isHiddenOCMD((PDOptionalContentMembershipDictionary) propertyList);
+        }
+        return false;
+    }
+
+    private boolean isHiddenOCMD(PDOptionalContentMembershipDictionary ocmd)
+    {
+        if (ocmd.getCOSObject().getCOSArray(COSName.VE) != null)
+        {
+            // support seems to be optional, and is approximated by /P and /OCGS
+            LOG.info("/VE entry ignored in Optional Content Membership Dictionary");
+        }
+        List<Boolean> visibles = new ArrayList<>();
+        for (PDPropertyList prop : ocmd.getOCGs())
+        {
+            visibles.add(!isHiddenOCG(prop));
+        }
+        COSName visibilityPolicy = ocmd.getVisibilityPolicy();
+        if (COSName.ANY_OFF.equals(visibilityPolicy))
+        {
+            for (boolean visible : visibles)
+            {
+                if (!visible)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (COSName.ALL_ON.equals(visibilityPolicy))
+        {
+            for (boolean visible : visibles)
+            {
+                if (!visible)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (COSName.ALL_OFF.equals(visibilityPolicy))
+        {
+            for (boolean visible : visibles)
+            {
+                if (visible)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+        // AnyOn is default
+        for (boolean visible : visibles)
+        {
+            if (visible)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static int getJavaVersion()
+    {
+        // strategy from lucene-solr/lucene/core/src/java/org/apache/lucene/util/Constants.java
+        String version = System.getProperty("java.specification.version");
+        final StringTokenizer st = new StringTokenizer(version, ".");
+        try
+        {
+            int major = Integer.parseInt(st.nextToken());
+            int minor = 0;
+            if (st.hasMoreTokens())
+            {
+                minor = Integer.parseInt(st.nextToken());
+            }
+            return major == 1 ? minor : major;
+        }
+        catch (NumberFormatException nfe)
+        {
+            // maybe some new numbering scheme in the 22nd century
+            return 0;
+        }
     }
 }

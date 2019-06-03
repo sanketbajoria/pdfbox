@@ -46,11 +46,6 @@
                         <artifactId>jaxb-api</artifactId>
                         <scope>provided</scope>
                     </dependency>
-                    <dependency>
-                        <groupId>javax.activation</groupId>
-                        <artifactId>activation</artifactId>
-                        <scope>provided</scope>
-                    </dependency>
                 </dependencies>
             </profile>
         </profiles>
@@ -128,9 +123,6 @@
             <plugin>
                 <groupId>com.googlecode.maven-download-plugin</groupId>
                 <artifactId>download-maven-plugin</artifactId>
-                <configuration>
-                    <skip>${skipTests}</skip>
-                </configuration>
                 <executions>
                     <execution>
                         <id>get-isartor</id>
@@ -162,34 +154,6 @@
                 </executions>
             </plugin>
 		</plugins>
-		<pluginManagement>
-			<plugins>
-				<!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
-				<plugin>
-					<groupId>org.eclipse.m2e</groupId>
-					<artifactId>lifecycle-mapping</artifactId>
-					<version>1.0.0</version>
-					<configuration>
-						<lifecycleMappingMetadata>
-							<pluginExecutions>
-								<pluginExecution>
-									<pluginExecutionFilter>
-										<groupId>com.googlecode.maven-download-plugin</groupId>
-										<artifactId>download-maven-plugin</artifactId>
-										<goals>
-											<goal>wget</goal>
-										</goals>
-									</pluginExecutionFilter>
-									<action>
-										<ignore />
-									</action>
-								</pluginExecution>
-							</pluginExecutions>
-						</lifecycleMappingMetadata>
-					</configuration>
-				</plugin>
-			</plugins>
-		</pluginManagement>
 	</build>
 
 	<dependencies>
@@ -211,11 +175,6 @@
 		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>log4j</groupId>
-			<artifactId>log4j</artifactId>
-			<scope>test</scope>
 		</dependency>
 		<!-- TODO find a suitable place to store the isator test pdfs <dependency> 
 			<groupId>org.pdfa</groupId> <artifactId>isartor</artifactId> <version>1.0-20080813</version> 

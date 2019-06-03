@@ -204,21 +204,7 @@ class AppearanceGeneratorHelper
                 }
                 else
                 {
-                    appearanceStream = new PDAppearanceStream(field.getAcroForm().getDocument());
-                    
-                    // Calculate the entries for the bounding box and the transformation matrix
-                    // settings for the appearance stream
-                    int rotation = resolveRotation(widget);
-                    Matrix matrix = Matrix.getRotateInstance(Math.toRadians(rotation), 0, 0);
-                    Point2D.Float point2D = matrix.transformPoint(rect.getWidth(), rect.getHeight());
-                    
-                    PDRectangle bbox = new PDRectangle(Math.abs((float) point2D.getX()), Math.abs((float) point2D.getY()));
-                    appearanceStream.setBBox(bbox);
-                    
-                    appearanceStream.setMatrix(calculateMatrix(bbox, rotation));
-                    appearanceStream.setFormType(1);
-
-                    appearanceStream.setResources(new PDResources());
+                    appearanceStream = prepareNormalAppearanceStream(widget);
 
                     appearanceDict.setNormalAppearance(appearanceStream);
                     // TODO support appearances other than "normal"
@@ -241,6 +227,30 @@ class AppearanceGeneratorHelper
             // restore the field level appearance
             defaultAppearance =  acroFormAppearance;
         }
+    }
+
+    private PDAppearanceStream prepareNormalAppearanceStream(PDAnnotationWidget widget)
+    {
+        PDAppearanceStream appearanceStream = new PDAppearanceStream(field.getAcroForm().getDocument());
+
+        // Calculate the entries for the bounding box and the transformation matrix
+        // settings for the appearance stream
+        int rotation = resolveRotation(widget);
+        PDRectangle rect = widget.getRectangle();
+        Matrix matrix = Matrix.getRotateInstance(Math.toRadians(rotation), 0, 0);
+        Point2D.Float point2D = matrix.transformPoint(rect.getWidth(), rect.getHeight());
+
+        PDRectangle bbox = new PDRectangle(Math.abs((float) point2D.getX()), Math.abs((float) point2D.getY()));
+        appearanceStream.setBBox(bbox);
+
+        AffineTransform at = calculateMatrix(bbox, rotation);
+        if (!at.isIdentity())
+        {
+            appearanceStream.setMatrix(at);
+        }
+        appearanceStream.setFormType(1);
+        appearanceStream.setResources(new PDResources());
+        return appearanceStream;
     }
     
     private PDDefaultAppearanceString getWidgetDefaultAppearanceString(PDAnnotationWidget widget) throws IOException
@@ -415,6 +425,18 @@ class AppearanceGeneratorHelper
             {
                 throw new IllegalArgumentException("font is null, check whether /DA entry is incomplete or incorrect");
             }
+            if (font.getName().contains("+"))
+            {
+                LOG.warn("Font '" + defaultAppearance.getFontName().getName() +
+                         "' of field '" + field.getFullyQualifiedName() + 
+                         "' contains subsetted font '" + font.getName() + "'");
+                LOG.warn("This may bring trouble with PDField.setValue(), PDAcroForm.flatten() or " +
+                         "PDAcroForm.refreshAppearances()");
+                LOG.warn("You should replace this font with a non-subsetted font:");
+                LOG.warn("PDFont font = PDType0Font.load(doc, new FileInputStream(fontfile), false);");
+                LOG.warn("acroForm.getDefaultResources().put(COSName.getPDFName(\"" +
+                         defaultAppearance.getFontName().getName() + "\", font);");
+            }
             // calculate the fontSize (because 0 = autosize)
             float fontSize = defaultAppearance.getFontSize();
             
@@ -432,10 +454,10 @@ class AppearanceGeneratorHelper
             
             // start the text output
             contents.beginText();
-            
-            // write the /DA string
+
+            // write font and color from the /DA string, with the calculated font size
             defaultAppearance.writeTo(contents, fontSize);
-            
+
             // calculate the y-position of the baseline
             float y;
             

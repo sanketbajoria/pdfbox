@@ -41,6 +41,8 @@ import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDDocumentCatalog;
 import org.apache.pdfbox.pdmodel.PDDocumentNameDictionary;
 import org.apache.pdfbox.pdmodel.PDEmbeddedFilesNameTreeNode;
+import org.apache.pdfbox.pdmodel.graphics.color.PDColorSpace;
+import org.apache.pdfbox.pdmodel.graphics.color.PDICCBased;
 import org.apache.pdfbox.preflight.PreflightConfiguration;
 import org.apache.pdfbox.preflight.PreflightContext;
 import org.apache.pdfbox.preflight.ValidationResult.ValidationError;
@@ -305,10 +307,10 @@ public class CatalogValidationProcess extends AbstractProcess
     /**
      * This method checks the destOutputProfile which must be a valid ICCProfile.
      * 
-     * If an other ICCProfile exists in the mapDestOutputProfile, a ValdiationError
-     * (ERROR_GRAPHIC_OUTPUT_INTENT_ICC_PROFILE_MULTIPLE) is returned because of only one profile is authorized. If the
-     * ICCProfile already exist in the mapDestOutputProfile, the method returns null. If the destOutputProfile contains
-     * an invalid ICCProfile, a ValidationError (ERROR_GRAPHIC_OUTPUT_INTENT_ICC_PROFILE_INVALID) is returned If the
+     * If another ICCProfile exists in the mapDestOutputProfile, a ValidationError
+     * (ERROR_GRAPHIC_OUTPUT_INTENT_ICC_PROFILE_MULTIPLE) is returned because only one profile is authorized. If the
+     * ICCProfile already exists in the mapDestOutputProfile, the method returns null. If the destOutputProfile contains
+     * an invalid ICCProfile, a ValidationError (ERROR_GRAPHIC_OUTPUT_INTENT_ICC_PROFILE_INVALID) is returned. If the
      * destOutputProfile is an empty stream, a ValidationError(ERROR_GRAPHIC_OUTPUT_INTENT_INVALID_ENTRY) is returned.
      * 
      * If the destOutputFile is valid, mapDestOutputProfile is updated, the ICCProfile is added to the document ctx and
@@ -358,17 +360,12 @@ public class CatalogValidationProcess extends AbstractProcess
                 return;
             }
 
-            InputStream is = stream.createInputStream();
-            ICC_Profile iccp = null;
-            try
+            ICC_Profile iccp;
+            try (InputStream is = stream.createInputStream())
             {
                 iccp = ICC_Profile.getInstance(is);
             }
-            finally
-            {
-                is.close();
-            }
-            
+
             if (!validateICCProfileNEntry(stream, ctx, iccp))
             {
                 return;
@@ -430,6 +427,7 @@ public class CatalogValidationProcess extends AbstractProcess
     }
 
     private boolean validateICCProfileNEntry(COSStream stream, PreflightContext ctx, ICC_Profile iccp)
+            throws IOException
     {
         COSDictionary streamDict = (COSDictionary) stream.getCOSObject();
         if (!streamDict.containsKey(COSName.N))
@@ -458,6 +456,24 @@ public class CatalogValidationProcess extends AbstractProcess
                     "/N entry of ICC profile is " + nNumberValue + " but the ICC profile has " + iccp.getNumComponents() + " components"));
             return false;
         }
+        validateICCProfileAlternateEntry(stream, ctx);
         return true;
+    }
+
+    private void validateICCProfileAlternateEntry(COSStream stream, PreflightContext ctx) throws IOException
+    {
+        COSArray array = new COSArray();
+        array.add(COSName.ICCBASED);
+        array.add(stream);
+        PDICCBased iccBased = PDICCBased.create(array, null);
+        PDColorSpace altCS = iccBased.getAlternateColorSpace();
+        if (altCS != null && altCS.getNumberOfComponents() != iccBased.getNumberOfComponents())
+        {
+            // https://github.com/veraPDF/veraPDF-library/issues/773
+            addValidationError(ctx, new ValidationError(ERROR_GRAPHIC_OUTPUT_INTENT_INVALID_ENTRY,
+                    "/N entry of ICC profile is different (" + iccBased.getNumberOfComponents()
+                    + ") than alternate entry colorspace component count ("
+                    + altCS.getNumberOfComponents() + ")"));
+        }
     }
 }

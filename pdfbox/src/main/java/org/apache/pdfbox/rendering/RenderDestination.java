@@ -14,19 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.pdfbox.examples.signature.validation;
+
+package org.apache.pdfbox.rendering;
 
 /**
- * Exception to handle a revoked Certificate explicitly
- * 
- * @author Alexis Suter
+ * Optional content groups are visible depending on the render purpose.
  */
-public class RevokedCertificateException extends Exception
+public enum RenderDestination 
 {
-    private static final long serialVersionUID = 3543946618794126654L;
-
-    public RevokedCertificateException(String message)
-    {
-        super(message);
-    }
+    /** graphics export  */
+    EXPORT,
+    /** viewing */
+    VIEW,
+    /** printing */
+    PRINT
 }

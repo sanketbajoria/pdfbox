@@ -54,6 +54,8 @@ public abstract class BaseParser
 
     static final int MAX_LENGTH_LONG = Long.toString(Long.MAX_VALUE).length();
 
+    private final CharsetDecoder utf8Decoder = Charsets.UTF_8.newDecoder();
+
     /**
      * Log instance.
      */
@@ -163,11 +165,13 @@ public abstract class BaseParser
         readExpectedChar('R');
         if (!(value instanceof COSInteger))
         {
-            throw new IOException("expected number, actual=" + value + " at offset " + numOffset);
+            LOG.error("expected number, actual=" + value + " at offset " + numOffset);
+            return COSNull.NULL;
         }
         if (!(generationNumber instanceof COSInteger))
         {
-            throw new IOException("expected number, actual=" + value + " at offset " + genOffset);
+            LOG.error("expected number, actual=" + value + " at offset " + genOffset);
+            return COSNull.NULL;
         }
         COSObjectKey key = new COSObjectKey(((COSInteger) value).longValue(),
                 ((COSInteger) generationNumber).intValue());
@@ -621,6 +625,7 @@ public abstract class BaseParser
      */
     protected COSArray parseCOSArray() throws IOException
     {
+        long startPosition = seqSource.getPosition();
         readExpectedChar('[');
         COSArray po = new COSArray();
         COSBase pbo;
@@ -659,7 +664,8 @@ public abstract class BaseParser
             else
             {
                 //it could be a bad object in the array which is just skipped
-                LOG.warn("Corrupt object reference at offset " + seqSource.getPosition());
+                LOG.warn("Corrupt object reference at offset " +
+                        seqSource.getPosition() + ", start offset: " + startPosition);
 
                 // This could also be an "endobj" or "endstream" which means we can assume that
                 // the array has ended.
@@ -776,10 +782,9 @@ public abstract class BaseParser
      */
     private boolean isValidUTF8(byte[] input)
     {
-        CharsetDecoder cs = Charsets.UTF_8.newDecoder();
         try
         {
-            cs.decode(ByteBuffer.wrap(input));
+            utf8Decoder.decode(ByteBuffer.wrap(input));
             return true;
         }
         catch (CharacterCodingException e)
@@ -1329,7 +1334,9 @@ public abstract class BaseParser
         catch( NumberFormatException e )
         {
             seqSource.unread(intBuffer.toString().getBytes(ISO_8859_1));
-            throw new IOException( "Error: Expected an integer type at offset "+ seqSource.getPosition(), e);
+            throw new IOException("Error: Expected an integer type at offset " +
+                                  seqSource.getPosition() +
+                                  ", instead got '" + intBuffer + "'", e);
         }
         return retval;
     }

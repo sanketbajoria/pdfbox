@@ -98,8 +98,11 @@ public final class StandardSecurityHandler extends SecurityHandler
 
     /**
      * Computes the version number of the StandardSecurityHandler based on the encryption key
-     * length.
-     * See PDF Spec 1.6 p 93 and PDF 1.7 AEL3
+     * length. See PDF Spec 1.6 p 93 and
+     * <a href="https://www.adobe.com/content/dam/acom/en/devnet/pdf/adobe_supplement_iso32000.pdf">PDF
+     * 1.7 Supplement ExtensionLevel: 3</a> and
+     * <a href="http://intranet.pdfa.org/wp-content/uploads/2016/08/ISO_DIS_32000-2-DIS4.pdf">PDF
+     * Spec 2.0</a>.
      *
      * @return The computed version number.
      */
@@ -172,6 +175,12 @@ public final class StandardSecurityHandler extends SecurityHandler
         if(!(decryptionMaterial instanceof StandardDecryptionMaterial))
         {
             throw new IOException("Decryption material is not compatible with the document");
+        }
+        
+        // This is only used with security version 4 and 5.
+        if (encryption.getVersion() >= 4) {
+	        setStreamFilterName(encryption.getStreamFilterName());
+	        setStringFilterName(encryption.getStreamFilterName());
         }
         setDecryptMetadata(encryption.isEncryptMetaData());
         StandardDecryptionMaterial material = (StandardDecryptionMaterial)decryptionMaterial;
@@ -396,7 +405,7 @@ public final class StandardSecurityHandler extends SecurityHandler
         }
 
         document.setEncryptionDictionary( encryptionDictionary );
-        document.getDocument().setEncryptionDictionary(encryptionDictionary.getCOSDictionary());
+        document.getDocument().setEncryptionDictionary(encryptionDictionary.getCOSObject());
     }
 
     private void prepareEncryptionDictRev6(String ownerPassword, String userPassword,
@@ -426,6 +435,7 @@ public final class StandardSecurityHandler extends SecurityHandler
             byte[] hashUE = computeHash2B(concat(userPasswordBytes, userKeySalt),
                     userPasswordBytes, null);
             cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(hashUE, "AES"),
+                    // "an initialization vector of zero"
                     new IvParameterSpec(new byte[16]));
             byte[] ue = cipher.doFinal(encryptionKey);
 
@@ -443,6 +453,7 @@ public final class StandardSecurityHandler extends SecurityHandler
             byte[] hashOE = computeHash2B(concat(ownerPasswordBytes, ownerKeySalt, u),
                     ownerPasswordBytes, u);
             cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(hashOE, "AES"),
+                    // "an initialization vector of zero"
                     new IvParameterSpec(new byte[16]));
             byte[] oe = cipher.doFinal(encryptionKey);
 
@@ -474,6 +485,7 @@ public final class StandardSecurityHandler extends SecurityHandler
             }
 
             cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(encryptionKey, "AES"),
+                    // "an initialization vector of zero"
                     new IvParameterSpec(new byte[16]));
 
             byte[] permsEnc = cipher.doFinal(perms);

@@ -113,6 +113,7 @@ import org.apache.pdfbox.filter.FilterFactory;
 import org.apache.pdfbox.io.IOUtils;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.common.PDPageLabels;
+import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.graphics.color.PDDeviceCMYK;
@@ -201,18 +202,6 @@ public class PDFDebugger extends JFrame
      */
     public static void main(String[] args) throws Exception
     {
-        try
-        {
-            // force KCMS (faster than LCMS) if available
-            Class.forName("sun.java2d.cmm.kcms.KcmsServiceProvider");
-            System.setProperty("sun.java2d.cmm", "sun.java2d.cmm.kcms.KcmsServiceProvider");
-        }
-        catch (ClassNotFoundException e)
-        {
-            // jdk7 or lower (KCMS has different name),
-            // or jdk10 and higher (KCMS no longer available)
-        }
-
         UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         if (System.getProperty("apple.laf.useScreenMenuBar") == null)
         {
@@ -368,9 +357,11 @@ public class PDFDebugger extends JFrame
                 exitForm(evt);
             }
         });
-        
+
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
         jScrollPane1.setBorder(new BevelBorder(BevelBorder.RAISED));
-        jScrollPane1.setPreferredSize(new Dimension(350, 500));
+        jScrollPane1.setPreferredSize(new Dimension(screenSize.width / 8, 500));
+        jSplitPane1.setDividerLocation(screenSize.width / 8);
         tree.addTreeSelectionListener(new TreeSelectionListener()
         {
             @Override
@@ -384,8 +375,8 @@ public class PDFDebugger extends JFrame
 
         jSplitPane1.setRightComponent(jScrollPane2);
         jSplitPane1.setDividerSize(3);
-        
-        jScrollPane2.setPreferredSize(new Dimension(300, 500));
+
+        jScrollPane2.setPreferredSize(new Dimension(screenSize.width / 8 * 7, 500));
         jScrollPane2.setViewportView(jTextPane1);
 
         jSplitPane1.setLeftComponent(jScrollPane1);
@@ -412,10 +403,7 @@ public class PDFDebugger extends JFrame
         menuBar.add(viewMenu.getMenu());
         setJMenuBar(menuBar);
 
-        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
-        int width = 1000;
-        int height = 970;
-        setBounds((screenSize.width - width) / 2, (screenSize.height - height) / 2, width, height);
+        setBounds(screenSize.width / 4, screenSize.height / 4, screenSize.width / 2, screenSize.height / 2);
 
         // drag and drop to open files
         setTransferHandler(new TransferHandler()
@@ -1004,7 +992,9 @@ public class PDFDebugger extends JFrame
         {
             selectedNode = ((MapEntry)selectedNode).getKey();
             selectedNode = getUnderneathObject(selectedNode);
-            FlagBitsPane flagBitsPane = new FlagBitsPane((COSDictionary) parentNode, (COSName) selectedNode);
+            FlagBitsPane flagBitsPane = new FlagBitsPane(document,
+                    (COSDictionary) parentNode,
+                    (COSName) selectedNode);
             replaceRightComponent(flagBitsPane.getPane());
         }
     }
@@ -1216,6 +1206,12 @@ public class PDFDebugger extends JFrame
     {
         if (document == null)
         {
+            return;
+        }
+        AccessPermission ap = document.getCurrentAccessPermission();
+        if (!ap.canPrint())
+        {
+            JOptionPane.showMessageDialog(this, "You do not have permission to print");
             return;
         }
 

@@ -29,6 +29,8 @@ import org.apache.pdfbox.pdmodel.common.COSObjectable;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 /**
  * The page tree, which defines the ordering of pages in the document in an efficient manner.
@@ -37,6 +39,7 @@ import java.util.List;
  */
 public class PDPageTree implements COSObjectable, Iterable<PDPage>
 {
+    private static final Log LOG = LogFactory.getLog(PDPageTree.class);
     private final COSDictionary root;
     private final PDDocument document; // optional
 
@@ -72,7 +75,7 @@ public class PDPageTree implements COSObjectable, Iterable<PDPage>
     {
         if (root == null)
         {
-            throw new IllegalArgumentException("root cannot be null");
+            throw new IllegalArgumentException("page tree root cannot be null");
         }
         // repair bad PDFs which contain a Page dict instead of a page tree, see PDFBOX-3154
         if (COSName.PAGE.equals(root.getCOSName(COSName.TYPE)))
@@ -105,10 +108,14 @@ public class PDPageTree implements COSObjectable, Iterable<PDPage>
             return value;
         }
 
-        COSDictionary parent = (COSDictionary) node.getDictionaryObject(COSName.PARENT, COSName.P);
-        if (parent != null)
+        COSBase base = node.getDictionaryObject(COSName.PARENT, COSName.P);
+        if (base instanceof COSDictionary)
         {
-            return getInheritableAttribute(parent, key);
+            COSDictionary parent = (COSDictionary) base;
+            if (COSName.PAGES.equals(parent.getDictionaryObject(COSName.TYPE)))
+            {
+                return getInheritableAttribute(parent, key);
+            }
         }
 
         return null;
@@ -132,7 +139,7 @@ public class PDPageTree implements COSObjectable, Iterable<PDPage>
     {
         List<COSDictionary> result = new ArrayList<>();
 
-        COSArray kids = (COSArray)node.getDictionaryObject(COSName.KIDS);
+        COSArray kids = node.getCOSArray(COSName.KIDS);
         if (kids == null)
         {
             // probably a malformed PDF
@@ -141,7 +148,16 @@ public class PDPageTree implements COSObjectable, Iterable<PDPage>
 
         for (int i = 0, size = kids.size(); i < size; i++)
         {
-            result.add((COSDictionary)kids.getObject(i));
+            COSBase base = kids.getObject(i);
+            if (base instanceof COSDictionary)
+            {
+                result.add((COSDictionary) base);
+            }
+            else
+            {
+                LOG.warn("COSDictionary expected, but got " +
+                        (base == null ? "null" : base.getClass().getSimpleName()));
+            }
         }
 
         return result;
