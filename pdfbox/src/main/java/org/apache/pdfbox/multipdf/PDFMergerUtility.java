@@ -1107,7 +1107,7 @@ public class PDFMergerUtility
         }
     }
 
-    private void mergeAcroForm(PDFCloneUtility cloner, PDDocumentCatalog destCatalog,
+    public void mergeAcroForm(PDFCloneUtility cloner, PDDocumentCatalog destCatalog,
             PDDocumentCatalog srcCatalog ) throws IOException
     {
         try
@@ -1181,7 +1181,7 @@ public class PDFMergerUtility
             // if a form is merged multiple times using PDFBox the newly generated
             // fields starting with dummyFieldName may already exist. We need to determine the last unique 
             // number used and increment that.
-            final String prefix = "dummyFieldName";
+            final String prefix = "pdffiddlerMergedField";
             final int prefixLength = prefix.length();
 
             for (PDField destField : destAcroForm.getFieldTree())
