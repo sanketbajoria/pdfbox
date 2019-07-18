@@ -372,16 +372,20 @@ public abstract class PDFont implements COSObjectable, PDFontLike
      */
     public float getStringWidth(String text) throws IOException
     {
-        byte[] bytes = encode(text);
+        return getStringWidth(encode(text));
+    }
+
+    public float getStringWidth(byte[] bytes) throws IOException
+    {
         ByteArrayInputStream in = new ByteArrayInputStream(bytes);
-        
+
         float width = 0;
         while (in.available() > 0)
         {
             int code = readCode(in);
             width += getWidth(code);
         }
-        
+
         return width;
     }
 

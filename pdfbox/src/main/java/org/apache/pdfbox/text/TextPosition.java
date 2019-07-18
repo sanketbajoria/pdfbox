@@ -73,6 +73,8 @@ public final class TextPosition
 
     private Matrix originalTextMatrix;
 
+    private byte[] originalBytes;
+
     public Matrix getOriginalCTM() {
         return originalCTM;
     }
@@ -105,6 +107,8 @@ public final class TextPosition
         return graphicsState;
     }
 
+    public byte[] getOriginalBytes() { return originalBytes; }
+
     /**
      * Constructor.
      *
@@ -127,7 +131,7 @@ public final class TextPosition
                         float endX, float endY, float maxHeight, float individualWidth,
                         float spaceWidth, String unicode, int[] charCodes, PDFont font,
                         float fontSize, int fontSizeInPt, PDColor strokingColor, PDColor nonStrokingColor,
-                        double alphaConstant, double nonStrokeAlphaConstant, Matrix originalTextMatrix, Matrix originalCTM, PDGraphicsState graphicsState)
+                        double alphaConstant, double nonStrokeAlphaConstant, Matrix originalTextMatrix, Matrix originalCTM, PDGraphicsState graphicsState, byte[] originalBytes)
     {
         this.textMatrix = textMatrix;
 
@@ -166,6 +170,7 @@ public final class TextPosition
         this.originalTextMatrix = originalTextMatrix;
         this.originalCTM = originalCTM;
         this.graphicsState = graphicsState;
+        this.originalBytes = originalBytes;
     }
 
     // Adds non-decomposing diacritics to the hash with their related combining character.

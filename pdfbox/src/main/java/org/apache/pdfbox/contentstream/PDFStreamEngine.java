@@ -23,11 +23,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Stack;
+import java.util.*;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -768,6 +764,7 @@ public abstract class PDFStreamEngine
 
         // read the stream until it is empty
         InputStream in = new ByteArrayInputStream(string);
+        int totalCodeLength = 0;
         while (in.available() > 0)
         {
             // decode a character
@@ -807,7 +804,7 @@ public abstract class PDFStreamEngine
             saveGraphicsState();
             Matrix textMatrixOld = textMatrix;
             Matrix textLineMatrixOld = textLineMatrix;
-            showGlyph(textRenderingMatrix, font, code, unicode, w);
+            showGlyph(textRenderingMatrix, font, code, unicode, w, Arrays.copyOfRange(string, totalCodeLength, totalCodeLength + codeLength));
             textMatrix = textMatrixOld;
             textLineMatrix = textLineMatrixOld;
             restoreGraphicsState();
@@ -827,6 +824,7 @@ public abstract class PDFStreamEngine
 
             // update the text matrix
             textMatrix.concatenate(Matrix.getTranslateInstance(tx, ty));
+            totalCodeLength += codeLength;
         }
     }
 
@@ -842,7 +840,7 @@ public abstract class PDFStreamEngine
      * @throws IOException if the glyph cannot be processed
      */
     protected void showGlyph(Matrix textRenderingMatrix, PDFont font, int code, String unicode,
-                             Vector displacement) throws IOException
+                             Vector displacement, byte[] str) throws IOException
     {
         if (font instanceof PDType3Font)
         {

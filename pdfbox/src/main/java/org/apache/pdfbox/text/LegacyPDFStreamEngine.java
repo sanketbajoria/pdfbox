@@ -147,7 +147,7 @@ class LegacyPDFStreamEngine extends PDFStreamEngine
      */
     @Override
     protected void showGlyph(Matrix textRenderingMatrix, PDFont font, int code, String unicode,
-                             Vector displacement) throws IOException
+                             Vector displacement, byte[] str) throws IOException
     {
         //
         // legacy calculations which were previously in PDFStreamEngine
@@ -336,7 +336,7 @@ class LegacyPDFStreamEngine extends PDFStreamEngine
                 Math.abs(spaceWidthDisplay), unicode, new int[] { code } , font, fontSize,
                 (int)(fontSize * textMatrix.getScalingFactorX()), state.getStrokingColor(),
                 state.getNonStrokingColor(), state.getAlphaConstant(),
-                state.getNonStrokeAlphaConstant(), getTextMatrix().clone(), state.getCurrentTransformationMatrix(), state));
+                state.getNonStrokeAlphaConstant(), getTextMatrix().clone(), state.getCurrentTransformationMatrix(), state, str));
     }
 
     /*private Matrix getCurrentTransformationMatrix(){
