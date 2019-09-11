@@ -75,7 +75,7 @@ public abstract class PDField implements COSObjectable
      * @param parent the parent node of the node to be created, or null if root.
      * @return a new PDField instance
      */
-    static PDField fromDictionary(PDAcroForm form, COSDictionary field, PDNonTerminalField parent)
+    public static PDField fromDictionary(PDAcroForm form, COSDictionary field, PDNonTerminalField parent)
     {
         return PDFieldFactory.createField(form, field, parent);
     }

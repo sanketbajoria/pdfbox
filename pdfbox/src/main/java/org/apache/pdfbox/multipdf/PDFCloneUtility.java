@@ -159,6 +159,93 @@ public class PDFCloneUtility
           return retval;
       }
 
+    public COSBase cloneForNewDocument( Object base, boolean compress ) throws IOException
+    {
+        if( base == null )
+        {
+            return null;
+        }
+        COSBase retval = clonedVersion.get(base);
+        if( retval != null )
+        {
+            //we are done, it has already been converted.
+            return retval;
+        }
+        if (base instanceof COSBase && clonedValues.contains(base))
+        {
+            // Don't clone a clone
+            return (COSBase) base;
+        }
+        if (base instanceof List)
+        {
+            COSArray array = new COSArray();
+            List<?> list = (List<?>) base;
+            for (Object obj : list)
+            {
+                array.add(cloneForNewDocument(obj, compress));
+            }
+            retval = array;
+        }
+        else if( base instanceof COSObjectable && !(base instanceof COSBase) )
+        {
+            retval = cloneForNewDocument( ((COSObjectable)base).getCOSObject(), compress );
+        }
+        else if( base instanceof COSObject )
+        {
+            COSObject object = (COSObject)base;
+            retval = cloneForNewDocument( object.getObject(), compress );
+        }
+        else if( base instanceof COSArray )
+        {
+            COSArray newArray = new COSArray();
+            COSArray array = (COSArray)base;
+            for( int i=0; i<array.size(); i++ )
+            {
+                newArray.add( cloneForNewDocument( array.get( i ), compress ) );
+            }
+            retval = newArray;
+        }
+        else if( base instanceof COSStream )
+        {
+            COSStream originalStream = (COSStream)base;
+            COSStream stream = destination.getDocument().createCOSStream();
+
+            try (OutputStream output = stream.createOutputStream(compress?COSName.FLATE_DECODE: null);
+                 InputStream input = originalStream.createInputStream())
+            {
+                IOUtils.copy(input, output);
+            }
+            clonedVersion.put( base, stream );
+            for( Map.Entry<COSName, COSBase> entry :  originalStream.entrySet() )
+            {
+                stream.setItem(entry.getKey(), cloneForNewDocument(entry.getValue(), compress));
+            }
+            if(!compress){
+                stream.removeItem(COSName.FLATE_DECODE);
+            }
+            retval = stream;
+        }
+        else if( base instanceof COSDictionary )
+        {
+            COSDictionary dic = (COSDictionary)base;
+            retval = new COSDictionary();
+            clonedVersion.put( base, retval );
+            for( Map.Entry<COSName, COSBase> entry : dic.entrySet() )
+            {
+                ((COSDictionary)retval).setItem(
+                        entry.getKey(),
+                        cloneForNewDocument(entry.getValue(), compress));
+            }
+        }
+        else
+        {
+            retval = (COSBase)base;
+        }
+        clonedVersion.put( base, retval );
+        clonedValues.add(retval);
+        return retval;
+    }
+
     public COSBase cloneForNewDocument( Object base, COSStream oldStream, List<Object> newTokens ) throws IOException
     {
         if( base == null )
