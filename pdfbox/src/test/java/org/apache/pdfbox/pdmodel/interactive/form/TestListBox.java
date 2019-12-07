@@ -253,7 +253,7 @@ public class TestListBox extends TestCase
             catch( IllegalArgumentException e )
             {
                 assertEquals( 
-                        "The number of entries for exportValue and displayValue shall be the same.",
+                        "The number of entries for displayValue and value shall be the same.",
                         e.getMessage() );
             }
         }

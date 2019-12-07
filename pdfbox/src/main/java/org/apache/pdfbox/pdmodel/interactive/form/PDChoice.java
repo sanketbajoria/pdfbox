@@ -147,7 +147,7 @@ public abstract class PDChoice extends PDVariableText
             if (exportValues.size() != displayValues.size())
             {
                 throw new IllegalArgumentException(
-                        "The number of entries for exportValue and displayValue shall be the same.");
+                        "The number of entries for displayValue and value shall be the same.");
             }
             else
             {

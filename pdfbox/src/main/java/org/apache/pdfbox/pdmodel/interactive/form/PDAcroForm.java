@@ -152,7 +152,7 @@ public final class PDAcroForm implements COSObjectable
      *
      * @return The PDF document.
      */
-    PDDocument getDocument()
+    public PDDocument getDocument()
     {
         return document;
     }
@@ -839,7 +839,7 @@ public final class PDAcroForm implements COSObjectable
         return pagesAnnotationsMap;
     }
     
-    private void removeFields(List<PDField> fields)
+    public void removeFields(List<PDField> fields)
     {
         for (PDField field : fields) {
             if (field.getParent() == null)
