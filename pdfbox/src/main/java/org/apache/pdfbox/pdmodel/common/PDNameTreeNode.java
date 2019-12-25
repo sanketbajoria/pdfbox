@@ -275,6 +275,26 @@ public abstract class PDNameTreeNode<T extends COSObjectable> implements COSObje
         }
     }
 
+    public Map<String, T> getModifiableNamesMap() throws IOException
+    {
+        COSArray namesArray = (COSArray)node.getDictionaryObject( COSName.NAMES );
+        if( namesArray != null )
+        {
+            Map<String, T> names = new LinkedHashMap<>();
+            for( int i=0; i<namesArray.size(); i+=2 )
+            {
+                COSString key = (COSString)namesArray.getObject(i);
+                COSBase cosValue = namesArray.getObject( i+1 );
+                names.put( key.getString(), convertCOSToPD(cosValue) );
+            }
+            return names;
+        }
+        else
+        {
+            return null;
+        }
+    }
+
     /**
      * Method to convert the COS value in the name tree to the PD Model object. The
      * default implementation will simply return the given COSBase object.

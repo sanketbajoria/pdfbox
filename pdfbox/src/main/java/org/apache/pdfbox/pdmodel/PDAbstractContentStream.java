@@ -74,7 +74,7 @@ import org.apache.pdfbox.util.NumberFormatUtil;
  *
  * @author Ben Litchfield
  */
-abstract class PDAbstractContentStream implements Closeable
+public abstract class PDAbstractContentStream implements Closeable
 {
     private static final Log LOG = LogFactory.getLog(PDAbstractContentStream.class);
 

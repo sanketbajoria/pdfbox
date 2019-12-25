@@ -1246,6 +1246,22 @@ public class PDFMergerUtility
         }
     }
 
+    public void mergeDestDictionary(PDFCloneUtility cloner, PDDocumentCatalog destCatalog, PDDocumentCatalog srcCatalog) throws IOException {
+        PDDocumentNameDestinationDictionary destDests = destCatalog.getDests();
+        PDDocumentNameDestinationDictionary srcDests = srcCatalog.getDests();
+        if (srcDests != null)
+        {
+            if (destDests == null)
+            {
+                destCatalog.getCOSObject().setItem(COSName.DESTS, cloner.cloneForNewDocument(srcDests));
+            }
+            else
+            {
+                cloner.cloneMerge(srcDests, destDests);
+            }
+        }
+    }
+
     public void mergeNameDictionary(PDFCloneUtility cloner, PDDocumentCatalog destCatalog, PDDocumentCatalog srcCatalog) throws IOException {
         PDDocumentNameDictionary destNames = destCatalog.getNames();
         PDDocumentNameDictionary srcNames = srcCatalog.getNames();

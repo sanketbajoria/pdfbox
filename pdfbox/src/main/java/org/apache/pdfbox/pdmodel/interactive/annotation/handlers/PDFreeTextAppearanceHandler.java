@@ -15,16 +15,10 @@
  */
 package org.apache.pdfbox.pdmodel.interactive.annotation.handlers;
 
-import java.io.IOException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.fontbox.util.Charsets;
 import org.apache.pdfbox.contentstream.operator.Operator;
-import org.apache.pdfbox.cos.COSArray;
-import org.apache.pdfbox.cos.COSBase;
-import org.apache.pdfbox.cos.COSName;
-import org.apache.pdfbox.cos.COSNumber;
-import org.apache.pdfbox.cos.COSObject;
+import org.apache.pdfbox.cos.*;
 import org.apache.pdfbox.pdfparser.PDFStreamParser;
 import org.apache.pdfbox.pdmodel.PDAppearanceContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
@@ -36,14 +30,17 @@ import org.apache.pdfbox.pdmodel.graphics.color.PDDeviceGray;
 import org.apache.pdfbox.pdmodel.graphics.color.PDDeviceRGB;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotation;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationFreeText;
-import static org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationLine.LE_NONE;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDAppearanceStream;
 import org.apache.pdfbox.pdmodel.interactive.annotation.PDBorderEffectDictionary;
-import static org.apache.pdfbox.pdmodel.interactive.annotation.handlers.PDAbstractAppearanceHandler.SHORT_STYLES;
 import org.apache.pdfbox.pdmodel.interactive.annotation.layout.AppearanceStyle;
 import org.apache.pdfbox.pdmodel.interactive.annotation.layout.PlainText;
 import org.apache.pdfbox.pdmodel.interactive.annotation.layout.PlainTextFormatter;
+import org.apache.pdfbox.util.Charsets;
 import org.apache.pdfbox.util.Matrix;
+
+import java.io.IOException;
+
+import static org.apache.pdfbox.pdmodel.interactive.annotation.PDAnnotationLine.LE_NONE;
 
 public class PDFreeTextAppearanceHandler extends PDAbstractAppearanceHandler
 {

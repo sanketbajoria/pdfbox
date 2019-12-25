@@ -353,7 +353,7 @@ public class PDFCloneUtility
        * @param target the merge target
        * @throws IOException if an I/O error occurs
        */
-      void cloneMerge( final COSObjectable base, COSObjectable target) throws IOException
+      public void cloneMerge(final COSObjectable base, COSObjectable target) throws IOException
       {
           if( base == null )
           {
@@ -429,5 +429,9 @@ public class PDFCloneUtility
           }
           clonedVersion.put( base, retval );
           clonedValues.add(retval);
+      }
+
+      public COSBase getClonedVersion(Object obj){
+          return clonedVersion.get(obj);
       }
 }
