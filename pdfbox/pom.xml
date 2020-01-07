@@ -45,7 +45,7 @@
     <dependencies>
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
-            <artifactId>fontbox</artifactId>
+            <artifactId>fontbox-modified</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

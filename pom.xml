@@ -42,20 +42,6 @@
     <url>http://svn.apache.org/viewvc/pdfbox/trunk</url>
   </scm>
 
-  <modules>
-    <module>parent</module>
-    <module>fontbox</module>
-    <module>xmpbox</module>
-    <module>pdfbox</module>
-    <module>preflight</module>
-    <module>preflight-app</module>
-    <module>debugger</module>
-    <module>tools</module>
-    <module>app</module>
-    <module>debugger-app</module>
-    <module>examples</module>
-  </modules>
-
   <build>
     <plugins>
       <plugin>
@@ -68,8 +54,30 @@
   </build>
 
   <profiles>
+	<profile>
+		<id>pdfflow</id>
+		<modules>
+			<module>parent</module>
+			<module>xmpbox</module>
+			<module>fontbox</module>
+			<module>pdfbox</module>
+		</modules>
+	</profile>
     <profile>
       <id>apache-release</id>
+	   <modules>
+		<module>parent</module>
+		<module>fontbox</module>
+		<module>xmpbox</module>
+		<module>pdfbox</module>
+		<module>preflight</module>
+		<module>preflight-app</module>
+		<module>debugger</module>
+		<module>tools</module>
+		<module>app</module>
+		<module>debugger-app</module>
+		<module>examples</module>
+	  </modules>
       <build>
         <plugins>
           <plugin>
