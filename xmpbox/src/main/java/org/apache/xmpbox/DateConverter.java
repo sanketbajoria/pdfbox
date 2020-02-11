@@ -322,7 +322,7 @@ public final class DateConverter
         // milliseconds/1000 = seconds = seconds / 60 = minutes = minutes/60 =
         // hours
         int hours = timeZone / 1000 / 60 / 60;
-        int minutes = (timeZone - (hours * 1000 * 60 * 60)) / 1000 / 1000;
+        int minutes = (timeZone - (hours * 1000 * 60 * 60)) / 1000 / 60;
         if (hours < 10)
         {
             retval.append("0");
