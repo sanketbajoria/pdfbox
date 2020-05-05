@@ -304,7 +304,9 @@ class LegacyPDFStreamEngine extends PDFStreamEngine
         // this, which is why we leave it until this point in PDFTextStreamEngine.
         if (unicode == null)
         {
-            if (font instanceof PDSimpleFont)
+            char c = (char) code;
+            unicode = new String(new char[] { c });
+            /*if (font instanceof PDSimpleFont)
             {
                 char c = (char) code;
                 unicode = new String(new char[] { c });
@@ -314,7 +316,7 @@ class LegacyPDFStreamEngine extends PDFStreamEngine
                 // Acrobat doesn't seem to coerce composite font's character codes, instead it
                 // skips them. See the "allah2.pdf" TestTextStripper file.
                 return;
-            }
+            }*/
         }
 
         // adjust for cropbox if needed
